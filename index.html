@@ -1486,11 +1486,21 @@ el('processBtn').addEventListener('click', ()=>{
     const c = clienteMap.get(chave);
     let status;
 
+    // --- REGRA CUSTOMIZADA: LN COMÉRCIO ---
+    // Pega o nome do parceiro (prioriza Sefaz, se não tiver tenta do Cliente)
+    const nomeParceiro = s?.parceiro || c?.parceiro || '';
+    const isLN = norm(nomeParceiro).includes(norm('LN COMERCIO DE ELETRONICOS LTDA'));
+    // --------------------------------------
+
     // Nota emitida pela empresa para ela mesma (emissor = destinatário, ex.:
     // transferência entre filiais): não é uma saída de verdade para
     // terceiros, então nem entra no confronto normal de saídas — fica numa
     // categoria à parte. (Só se aplica no modo Saídas.)
     if(validationMode==='saidas' && s && s.entradaPropria){
+      status = 'entrada_propria';
+    }
+    // Aplica a regra da LN Comércio para transformar em Entrada Própria na Validação Simples
+    else if(validationDepth==='simples' && isLN){
       status = 'entrada_propria';
     }
     else if(s && !c) status = 'ausente_cliente';
@@ -1611,13 +1621,13 @@ function renderReport(rows, totals){
     <div class="card miss-c"><div class="num">${totals.ausente_cliente.toLocaleString('pt-BR')}</div><div class="lbl">Ausentes no sistema do cliente</div></div>
     <div class="card miss-s"><div class="num">${totals.ausente_sefaz.toLocaleString('pt-BR')}</div><div class="lbl">Ausentes no relatório Sefaz</div></div>
     ${validationMode==='saidas' ? `<div class="card other"><div class="num">${totals.terceiros.toLocaleString('pt-BR')}</div><div class="lbl">Entrada de terceiros (fora do escopo)</div></div>` : ''}
-    ${validationMode==='saidas' ? `<div class="card self"><div class="num">${totals.entrada_propria.toLocaleString('pt-BR')}</div><div class="lbl">Entrada própria (transferência interna)</div></div>` : ''}
+    ${(validationMode==='saidas' || totals.entrada_propria > 0) ? `<div class="card self"><div class="num">${totals.entrada_propria.toLocaleString('pt-BR')}</div><div class="lbl">Entrada própria</div></div>` : ''}
   `;
 
   el('filterTerceirosBtn').style.display = validationMode==='saidas' ? '' : 'none';
   el('legendTerceiros').style.display = validationMode==='saidas' ? '' : 'none';
-  el('filterEntradaPropriaBtn').style.display = validationMode==='saidas' ? '' : 'none';
-  el('legendEntradaPropria').style.display = validationMode==='saidas' ? '' : 'none';
+  el('filterEntradaPropriaBtn').style.display = (validationMode==='saidas' || totals.entrada_propria > 0) ? '' : 'none';
+  el('legendEntradaPropria').style.display = (validationMode==='saidas' || totals.entrada_propria > 0) ? '' : 'none';
 
   function diffRow(label, s, c){
     const d = round2(s-c);
@@ -1648,7 +1658,7 @@ function renderReport(rows, totals){
     </div>` : ''}
     ${totals.entrada_propria>0 ? `
     <div class="recon-note">
-      ℹ️ ${totals.entrada_propria.toLocaleString('pt-BR')} nota(s) da Sefaz têm o emissor e o destinatário com o <b>mesmo CNPJ</b>
+      ℹ️ ${totals.entrada_propria.toLocaleString('pt-BR')} nota(s) da Sefaz têm o emissor e o destinatário com o <b>mesmo CNPJ</b> (ou configuradas como exceção customizada)
       (R$ ${fmtMoney(totals.soma_ct_entrada_propria)} em valor contábil, R$ ${fmtMoney(totals.soma_icms_entrada_propria)} em ICMS) —
       são <b>notas de entrada própria</b> (ex.: transferência entre filiais), não saídas para terceiros. Elas foram excluídas dos totais "Sefaz" acima e classificadas à parte; o esperado é que apareçam no livro de <b>entradas</b>, não no de saídas.
       <button class="filter-btn no-print" style="margin-top:8px;" onclick="downloadEntradaPropria()">⬇ Baixar lista de Entrada Própria (XLSX)</button>
