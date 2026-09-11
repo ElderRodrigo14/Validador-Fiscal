@@ -1,0 +1,1959 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Validador Fiscal — Sefaz × Sistema do Cliente</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1b2b;
+    --panel:#152538;
+    --panel-2:#1b2f47;
+    --line:#2a4059;
+    --ink:#e7edf5;
+    --ink-dim:#9fb2c9;
+    --accent:#3fb6a8;
+    --miss:#8a7fe0;
+    --other:#5c9bd1; --other-bg:rgba(92,155,209,0.14);
+    --self:#c77dc2; --self-bg:rgba(199,125,194,0.14);
+    --ok:#3fb6a8; --ok-bg:rgba(63,182,168,0.12);
+    --warn:#e8b34c; --warn-bg:rgba(232,179,76,0.12);
+    --bad:#e2665f; --bad-bg:rgba(226,102,95,0.13);
+    --miss-bg:rgba(138,127,224,0.14);
+    --mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+    --sans:'Inter','Segoe UI',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(63,182,168,0.10), transparent 60%),
+      radial-gradient(1000px 500px at 100% 0%, rgba(138,127,224,0.08), transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    min-height:100vh;
+    padding:32px 40px 80px;
+  }
+  a{color:var(--accent);}
+
+  header{
+    border-bottom:1px solid var(--line);
+    padding-bottom:22px;
+    margin-bottom:28px;
+  }
+  .eyebrow{
+    font-family:var(--mono); font-size:11.5px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:10px; display:flex; align-items:center; gap:8px;
+  }
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);}
+  h1{font-size:28px; margin:0 0 8px; font-weight:650; letter-spacing:-0.01em;}
+  h1 span{color:var(--ink-dim); font-weight:450;}
+  .sub{font-size:13.5px; color:var(--ink-dim); max-width:720px; line-height:1.6;}
+  .sub b{color:var(--ink);}
+
+  /* ---- Seletor de modo: Saídas / Entradas ---- */
+  .mode-select{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin-bottom:20px;
+  }
+  .mode-btn{
+    display:flex; align-items:center; gap:12px;
+    background:var(--panel);
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    padding:14px 18px;
+    cursor:pointer;
+    font-family:var(--sans);
+    text-align:left;
+    transition:all .15s ease;
+  }
+  .mode-btn:hover{border-color:var(--accent);}
+  .mode-btn.active{
+    background:var(--panel-2);
+    border-color:var(--accent);
+    box-shadow:0 0 0 1px var(--accent) inset;
+  }
+  .mode-icon{font-size:22px; flex:none;}
+  .mode-info{display:flex; flex-direction:column; gap:2px;}
+  .mode-title{font-size:14px; font-weight:700; color:var(--ink);}
+  .mode-desc{font-size:11.5px; color:var(--ink-dim);}
+  .mode-btn.active .mode-title{color:var(--accent);}
+
+  /* ---- Portal: telas iniciais Completa / Simples ---- */
+  .portal-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:20px;
+    margin:8px 0 30px;
+  }
+  .portal-card{
+    background:var(--panel);
+    border:1.5px solid var(--line);
+    border-radius:14px;
+    padding:32px 28px;
+    text-align:left;
+    cursor:pointer;
+    transition:all .18s ease;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .portal-card:hover{
+    border-color:var(--accent);
+    background:var(--panel-2);
+    transform:translateY(-2px);
+    box-shadow:0 8px 24px rgba(0,0,0,0.25);
+  }
+  .portal-icon{font-size:34px;}
+  .portal-title{font-size:19px; font-weight:700; color:var(--ink);}
+  .portal-desc{font-size:13px; color:var(--ink-dim); line-height:1.55; flex:1;}
+  .portal-cta{
+    font-family:var(--mono); font-size:12px; font-weight:700; color:var(--accent);
+    letter-spacing:.03em;
+  }
+
+  /* ---- Cabeçalho do espaço de trabalho (dentro de um tipo escolhido) ---- */
+  .workspace-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:18px; flex-wrap:wrap; gap:10px;
+  }
+  .back-link{
+    background:none; border:none; color:var(--ink-dim); font-family:var(--sans);
+    font-size:13px; cursor:pointer; padding:6px 0; transition:color .15s;
+  }
+  .back-link:hover{color:var(--accent);}
+  .workspace-badge{
+    font-family:var(--mono); font-size:11.5px; font-weight:700; color:var(--accent);
+    background:var(--panel-2); border:1px solid var(--line); border-radius:999px;
+    padding:5px 14px;
+  }
+
+
+  /* ---- Upload panel ---- */
+  .upload-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+    margin-bottom:18px;
+  }
+  .drop{
+    background:var(--panel);
+    border:1.5px dashed var(--line);
+    border-radius:12px;
+    padding:26px 22px;
+    text-align:center;
+    cursor:pointer;
+    transition:all .15s ease;
+    position:relative;
+  }
+  .drop:hover, .drop.drag{border-color:var(--accent); background:var(--panel-2);}
+  .drop input{display:none;}
+  .drop .tag{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:10px;
+  }
+  .drop .icon{font-size:26px; margin-bottom:10px; opacity:.7;}
+  .drop .title{font-size:14px; font-weight:600; margin-bottom:4px;}
+  .drop .hint{font-size:12px; color:var(--ink-dim);}
+  .drop .filename{
+    margin-top:12px; font-family:var(--mono); font-size:12px; color:var(--ok);
+    background:var(--ok-bg); padding:6px 10px; border-radius:6px; display:inline-block;
+    max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+
+  .sheet-picker{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:14px 16px; margin-bottom:14px; display:none;
+  }
+  .sheet-picker.show{display:block;}
+  .sheet-picker h4{margin:0 0 10px; font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-dim);}
+  .sheet-opt{
+    display:flex; align-items:center; gap:8px; padding:6px 0; font-size:13px; font-family:var(--mono);
+  }
+  .sheet-opt input{accent-color:var(--accent);}
+  .sheet-opt .meta{color:var(--ink-dim); font-size:11.5px;}
+
+  .action-row{display:flex; align-items:center; gap:14px; margin:18px 0 30px;}
+  #processBtn{
+    background:var(--accent); color:#08211e; border:none; font-weight:700; font-size:14px;
+    padding:12px 26px; border-radius:8px; cursor:pointer; font-family:var(--sans);
+    transition:transform .1s ease, opacity .15s;
+  }
+  #processBtn:hover{transform:translateY(-1px);}
+  #processBtn:disabled{opacity:.35; cursor:not-allowed; transform:none;}
+  #resetBtn{
+    background:transparent; color:var(--ink-dim); border:1px solid var(--line); font-size:13px;
+    padding:11px 18px; border-radius:8px; cursor:pointer; font-family:var(--sans);
+  }
+  #resetBtn:hover{color:var(--ink); border-color:var(--accent);}
+  .status-line{font-family:var(--mono); font-size:12.5px; color:var(--ink-dim);}
+  .status-line.err{color:var(--bad);}
+  .privacy-note{
+    font-family:var(--mono); font-size:11px; color:var(--ink-dim); margin-top:10px; display:flex; gap:7px; align-items:flex-start;
+  }
+  .privacy-note .dot{width:6px;height:6px;border-radius:50%;background:var(--accent); margin-top:4px; flex:none;}
+
+  #report{display:none;}
+
+  /* ---- Summary cards ---- */
+  .cards{display:grid; grid-template-columns:repeat(6,1fr); gap:14px; margin-bottom:22px;}
+  .cards.cards-5{grid-template-columns:repeat(5,1fr);}
+  .cards.cards-7{grid-template-columns:repeat(7,1fr);}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; position:relative; overflow:hidden;}
+  .card::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px;}
+  .card.total::before{background:var(--ink-dim);}
+  .card.ok::before{background:var(--ok);}
+  .card.cancel::before{background:var(--warn);}
+  .card.miss-c::before{background:var(--bad);}
+  .card.miss-s::before{background:var(--miss);}
+  .card.other::before{background:var(--other);}
+  .card.self::before{background:var(--self);}
+  .card .num{font-family:var(--mono); font-size:26px; font-weight:600; letter-spacing:-0.02em;}
+  .card .lbl{font-size:12px; color:var(--ink-dim); margin-top:4px;}
+  .card.ok .num{color:var(--ok);} .card.cancel .num{color:var(--warn);}
+  .card.miss-c .num{color:var(--bad);} .card.miss-s .num{color:var(--miss);}
+  .card.other .num{color:var(--other);}
+  .card.self .num{color:var(--self);}
+
+  .recon{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px 20px; margin-bottom:28px; display:grid; grid-template-columns:repeat(3,1fr);}
+  .recon .col{padding:0 22px; border-left:1px solid var(--line);}
+  .recon .col:first-child{border-left:none; padding-left:0;}
+  .recon .col h3{margin:0 0 10px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim); font-weight:600;}
+  .recon .row{display:flex; justify-content:space-between; align-items:baseline; font-family:var(--mono); font-size:13px; padding:3px 0;}
+  .recon .row .k{color:var(--ink-dim);} .recon .row .v{color:var(--ink); font-weight:600;}
+  .recon .row.diff .v{color:var(--warn);} .recon .row.diffzero .v{color:var(--ok);}
+  .recon-note{
+    grid-column:1 / -1; margin-top:16px; padding-top:14px; border-top:1px solid var(--line);
+    font-family:var(--sans); font-size:12px; color:var(--ink-dim); line-height:1.6;
+  }
+  .recon-note b{color:var(--other);}
+
+  .controls{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px;}
+  .filter-btn{
+    font-family:var(--sans); font-size:12.5px; font-weight:600; background:var(--panel); border:1px solid var(--line);
+    color:var(--ink-dim); padding:8px 14px; border-radius:999px; cursor:pointer; transition:all .15s ease; display:flex; align-items:center; gap:7px;
+  }
+  .filter-btn .swatch{width:8px;height:8px;border-radius:50%;}
+  .filter-btn:hover{border-color:var(--accent); color:var(--ink);}
+  .filter-btn.active{background:var(--panel-2); color:var(--ink); border-color:var(--accent);}
+
+  .controls-right{margin-left:auto; display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+
+  .search-wrap{position:relative;}
+  #search{
+    background:var(--panel); border:1px solid var(--line); color:var(--ink); font-family:var(--sans); font-size:13px;
+    padding:9px 14px 9px 34px; border-radius:8px; width:280px; outline:none; transition:border-color .15s;
+  }
+  #search:focus{border-color:var(--accent);}
+  .search-wrap svg{position:absolute; left:11px; top:50%; transform:translateY(-50%); opacity:.5;}
+
+  .count-note{font-family:var(--mono); font-size:11.5px; color:var(--ink-dim); margin-bottom:10px;}
+
+  /* ---- Chart panel: confronto por status ---- */
+  .chart-panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:20px 22px;
+    margin-bottom:20px;
+  }
+  .chart-head{
+    display:flex; justify-content:space-between; align-items:baseline;
+    margin-bottom:18px; flex-wrap:wrap; gap:6px;
+  }
+  .chart-head h3{margin:0; font-size:14px; font-weight:650;}
+  .chart-head h3 span{color:var(--accent);}
+  .chart-count{font-family:var(--mono); font-size:11.5px; color:var(--ink-dim);}
+  .metric-block{margin-bottom:20px;}
+  .metric-block:last-child{margin-bottom:0;}
+  .metric-title-row{
+    display:flex; justify-content:space-between; align-items:baseline; margin-bottom:9px;
+  }
+  .metric-title{font-size:12.5px; font-weight:650; color:var(--ink);}
+  .metric-delta{
+    font-family:var(--mono); font-size:11px; font-weight:700; padding:2px 9px; border-radius:999px;
+  }
+  .metric-delta.match{background:var(--ok-bg); color:var(--ok);}
+  .metric-delta.mismatch{background:var(--bad-bg); color:var(--bad);}
+  .bar-row{display:flex; align-items:center; gap:10px; margin-bottom:7px;}
+  .bar-row:last-child{margin-bottom:0;}
+  .bar-tag{
+    width:58px; flex:none; font-family:var(--mono); font-size:10.5px; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--ink-dim);
+  }
+  .bar-track{
+    flex:1; height:20px; background:var(--panel-2); border-radius:5px; overflow:hidden; position:relative;
+  }
+  .bar-fill{
+    height:100%; border-radius:5px; transition:width .35s ease;
+    display:flex; align-items:center;
+  }
+  .bar-fill.sefaz{background:linear-gradient(90deg, var(--accent), #2e8b80);}
+  .bar-fill.cliente{background:linear-gradient(90deg, var(--miss), #6a60c4);}
+  .bar-val{
+    flex:none; width:130px; text-align:right; font-family:var(--mono); font-size:12px; color:var(--ink);
+  }
+  .chart-empty{
+    color:var(--ink-dim); font-size:12.5px; font-family:var(--sans); padding:8px 0;
+  }
+
+  /* ---- Ranking de risco ---- */
+  #rankingStatusLabel{font-size:12px; font-weight:450; color:var(--ink-dim);}
+  .rank-row{
+    display:flex; align-items:center; gap:12px; padding:9px 0;
+    border-bottom:1px solid rgba(42,64,89,0.5);
+  }
+  .rank-row:last-child{border-bottom:none;}
+  .rank-pos{
+    width:22px; flex:none; font-family:var(--mono); font-size:11px; color:var(--ink-dim); text-align:right;
+  }
+  .rank-info{flex:1; min-width:0;}
+  .rank-chave{font-family:var(--mono); font-size:11px; color:var(--ink-dim);}
+  .rank-parceiro{
+    font-family:var(--sans); font-size:12.5px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .rank-bar-wrap{flex:1.4; min-width:120px;}
+  .rank-track{height:8px; background:var(--panel-2); border-radius:5px; overflow:hidden;}
+  .rank-fill{height:100%; border-radius:5px; background:linear-gradient(90deg, var(--bad), #b8433d);}
+  .rank-val{
+    flex:none; width:150px; text-align:right; font-family:var(--mono); font-size:12.5px; font-weight:700; color:var(--bad);
+  }
+  .rank-status{flex:none;}
+
+  .table-wrap{background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden;}
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  thead th{
+    position:sticky; top:0; z-index:2; background:var(--panel-2); text-align:left; padding:11px 12px;
+    font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-dim); font-weight:700;
+    border-bottom:1px solid var(--line); white-space:nowrap; cursor:pointer; user-select:none;
+  }
+  thead th:hover{color:var(--ink);}
+  thead th.num-col, tbody td.num-col{text-align:right;}
+  thead th .arrow{opacity:.4; font-size:9px; margin-left:3px;}
+  tbody td{padding:9px 12px; border-bottom:1px solid rgba(42,64,89,0.55); font-family:var(--mono); white-space:nowrap; color:var(--ink);}
+  tbody tr:hover{background:rgba(255,255,255,0.025);}
+  tbody tr:last-child td{border-bottom:none;}
+  .chave{font-size:11px; color:var(--ink-dim); letter-spacing:.01em;}
+  .parceiro{font-family:var(--sans); font-size:12.5px; color:var(--ink); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .status-pill{font-family:var(--sans); display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:650;}
+  .status-pill .dot{width:6px;height:6px;border-radius:50%;}
+  .status-ok{background:var(--ok-bg); color:var(--ok);} .status-ok .dot{background:var(--ok);}
+  .status-cancelada{background:var(--warn-bg); color:var(--warn);} .status-cancelada .dot{background:var(--warn);}
+  .status-ausente_cliente{background:var(--bad-bg); color:var(--bad);} .status-ausente_cliente .dot{background:var(--bad);}
+  .status-ausente_sefaz{background:var(--miss-bg); color:var(--miss);} .status-ausente_sefaz .dot{background:var(--miss);}
+  .status-terceiros{background:var(--other-bg); color:var(--other);} .status-terceiros .dot{background:var(--other);}
+  .status-entrada_propria{background:var(--self-bg); color:var(--self);} .status-entrada_propria .dot{background:var(--self);}
+  .status-divergente{background:var(--bad-bg); color:var(--bad);} .status-divergente .dot{background:var(--bad);}
+
+  .cellpair{display:flex; flex-direction:column; gap:1px; line-height:1.35;}
+  .cellpair .s{color:var(--ink);} .cellpair .c{color:var(--ink-dim); font-size:11px;}
+  .diff-flag{color:var(--bad); font-weight:700;}
+  .dash{color:var(--ink-dim); opacity:.5;}
+
+  .empty-state{text-align:center; padding:60px 20px; color:var(--ink-dim); font-family:var(--sans); font-size:13px;}
+
+  footer{margin-top:26px; font-family:var(--mono); font-size:11px; color:var(--ink-dim); line-height:1.8;}
+  .legend{display:flex; gap:18px; flex-wrap:wrap; margin-top:8px;}
+  .legend span{display:inline-flex; align-items:center; gap:6px;}
+  .legend .dot{width:7px;height:7px;border-radius:50%;}
+
+  @media (max-width:900px){
+    .upload-grid{grid-template-columns:1fr;}
+    .portal-grid{grid-template-columns:1fr;}
+    .cards, .cards.cards-5, .cards.cards-7{grid-template-columns:repeat(2,1fr);}
+    .recon{grid-template-columns:1fr;}
+    .recon .col{border-left:none; border-top:1px solid var(--line); padding:14px 0 0; margin-top:14px;}
+    .recon .col:first-child{margin-top:0; padding-top:0;}
+    body{padding:20px;}
+  }
+
+  /* ---- Impressão / PDF: fundo branco, texto escuro, sem controles ---- */
+  /* ---- Validação Simples: esconde o que depende de valores ---- */
+  body.depth-simples #recon,
+  body.depth-simples #chartPanel,
+  body.depth-simples #rankingPanel,
+  body.depth-simples .value-col{ display:none !important; }
+
+  @media print{
+    body{background:#fff !important; color:#111 !important; padding:14px;}
+    .upload-grid, .sheet-picker, .action-row, .no-print, .filter-btn, #search, .mode-select{display:none !important;}
+    .controls{display:none !important;}
+    .eyebrow{color:#0d6b62 !important;}
+    .sub, .meta{color:#444 !important;}
+    header{border-color:#ccc !important;}
+    h1 span{color:#555 !important;}
+    .card, .recon, .chart-panel, .table-wrap{
+      background:#fff !important; border:1px solid #ccc !important; box-shadow:none !important;
+      break-inside:avoid;
+    }
+    .card .lbl, .recon .col h3, .metric-title, .chart-count, .count-note, .bar-tag,
+    .rank-chave, footer, .legend span, .recon-note{color:#555 !important;}
+    .recon-note{border-color:#ccc !important;}
+    .recon-note b{color:#2f6da3 !important;}
+    .card .num{color:#111 !important;}
+    .card.ok .num{color:#0d8f7f !important;}
+    .card.cancel .num{color:#a97a14 !important;}
+    .card.miss-c .num{color:#c23b34 !important;}
+    .card.miss-s .num{color:#6a5fc9 !important;}
+    .card.other .num{color:#2f6da3 !important;}
+    .card.self .num{color:#a1489b !important;}
+    .recon .row .v, .bar-val, .rank-val, .rank-parceiro{color:#111 !important;}
+    .recon .row.diffzero .v{color:#0d8f7f !important;}
+    .recon .row.diff .v{color:#a97a14 !important;}
+    .bar-track, .rank-track{background:#eee !important;}
+    .bar-fill.sefaz{background:#0d8f7f !important;}
+    .bar-fill.cliente{background:#6a5fc9 !important;}
+    .rank-fill{background:#c23b34 !important;}
+    .metric-delta.match{background:#e2f5f1 !important; color:#0d6b62 !important;}
+    .metric-delta.mismatch{background:#fbe4e2 !important; color:#a4302a !important;}
+    thead th{background:#f2f2f2 !important; color:#333 !important; border-color:#ccc !important;}
+    tbody td{color:#111 !important; border-color:#ddd !important;}
+    .chave, .parceiro, .cellpair .c{color:#555 !important;}
+    .diff-flag{color:#a4302a !important;}
+    .status-ok{background:#e2f5f1 !important; color:#0d6b62 !important;}
+    .status-cancelada{background:#faf1de !important; color:#8a6414 !important;}
+    .status-ausente_cliente, .status-divergente{background:#fbe4e2 !important; color:#a4302a !important;}
+    .status-ausente_sefaz{background:#eae7fa !important; color:#5b4fc4 !important;}
+    .status-terceiros{background:#e4eff8 !important; color:#2f6da3 !important;}
+    .status-entrada_propria{background:#f6e7f5 !important; color:#a1489b !important;}
+    table{font-size:10.5px;}
+    thead th{position:static;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow"><span class="dot"></span>VALIDAÇÃO FISCAL POR CHAVE DE ACESSO</div>
+  <h1>Sefaz <span>×</span> Sistema do Cliente</h1>
+  <div class="sub">Suba o relatório da Sefaz e o relatório de movimento fiscal do sistema do cliente. A comparação — e a identificação de notas ausentes em qualquer um dos lados — é feita <b>inteiramente no seu navegador</b>: nenhum arquivo é enviado para servidor algum.</div>
+</header>
+
+<div id="portalScreen">
+  <div class="portal-grid">
+    <button class="portal-card" id="portalCompletaBtn">
+      <div class="portal-icon">🔎</div>
+      <div class="portal-title">Validação Completa</div>
+      <div class="portal-desc">Confronta chave de acesso, valor contábil, base de cálculo do ICMS e valor do ICMS entre a Sefaz e o sistema do cliente.</div>
+      <div class="portal-cta">Começar →</div>
+    </button>
+    <button class="portal-card" id="portalSimplesBtn">
+      <div class="portal-icon">🔑</div>
+      <div class="portal-title">Validação Simples</div>
+      <div class="portal-desc">Só confronta se a nota existe nos dois lados pela chave de acesso — não exige colunas de valor no relatório.</div>
+      <div class="portal-cta">Começar →</div>
+    </button>
+  </div>
+</div>
+
+<div id="workspaceScreen" style="display:none;">
+  <div class="workspace-head no-print">
+    <button class="back-link" id="backToPortalBtn">← Trocar tipo de validação</button>
+    <span class="workspace-badge" id="workspaceBadge"></span>
+  </div>
+
+  <div class="mode-select" id="modeSelect">
+    <button class="mode-btn active" data-mode="saidas" id="modeSaidasBtn">
+      <span class="mode-icon">📤</span>
+      <span class="mode-info">
+        <span class="mode-title">Validar Saídas</span>
+        <span class="mode-desc">Notas emitidas pela sua empresa</span>
+      </span>
+    </button>
+    <button class="mode-btn" data-mode="entradas" id="modeEntradasBtn">
+      <span class="mode-icon">📥</span>
+      <span class="mode-info">
+        <span class="mode-title">Validar Entradas</span>
+        <span class="mode-desc">Notas de compra recebidas de fornecedores</span>
+      </span>
+    </button>
+  </div>
+
+  <div class="upload-grid">
+    <div class="drop" id="dropSefaz">
+    <input type="file" id="fileSefaz" accept=".xlsx,.xls,.csv" multiple>
+    <div class="tag">Relatório 1</div>
+    <div class="icon">📄</div>
+    <div class="title">Relatório(s) da Sefaz</div>
+    <div class="hint" id="hintSefaz">NF-e e/ou NFC-e emitidas (.xlsx ou .xls) — selecione ou arraste 1 ou mais arquivos</div>
+    <div class="filename" id="nameSefaz" style="display:none;"></div>
+  </div>
+  <div class="drop" id="dropCliente">
+    <input type="file" id="fileCliente" accept=".xlsx,.xls,.csv">
+    <div class="tag">Relatório 2</div>
+    <div class="icon">🗂️</div>
+    <div class="title">Relatório do Sistema do Cliente</div>
+    <div class="hint" id="hintCliente">Movimento de livros fiscais — livro de saídas (.xlsx ou .xls) — clique ou arraste aqui</div>
+    <div class="filename" id="nameCliente" style="display:none;"></div>
+  </div>
+</div>
+
+<div class="sheet-picker" id="sefazSheetPicker">
+  <h4>Relatório(s)/planilha(s) da Sefaz a incluir na validação</h4>
+  <div id="sefazSheetOpts"></div>
+</div>
+
+<div class="sheet-picker" id="clienteSheetPicker">
+  <h4>Planilha "dados" não encontrada — selecione a(s) planilha(s) do cliente a incluir</h4>
+  <div id="clienteSheetOpts"></div>
+</div>
+
+<div class="action-row">
+  <button id="processBtn" disabled>Processar validação</button>
+  <button id="resetBtn">Limpar</button>
+  <span class="status-line" id="statusLine"></span>
+</div>
+
+<div id="report">
+  <section class="cards" id="cards"></section>
+  <section class="recon" id="recon"></section>
+
+  <div class="chart-panel" id="rankingPanel">
+    <div class="chart-head">
+      <h3>Maiores diferenças — risco fiscal <span id="rankingStatusLabel"></span></h3>
+      <span class="chart-count" id="rankingCount"></span>
+    </div>
+    <div id="rankingBody"></div>
+  </div>
+
+  <div class="controls">
+    <button class="filter-btn active" data-filter="all"><span class="swatch" style="background:var(--ink-dim)"></span>Todas</button>
+    <button class="filter-btn" data-filter="ok"><span class="swatch" style="background:var(--ok)"></span>Conferem</button>
+    <button class="filter-btn" data-filter="cancelada"><span class="swatch" style="background:var(--warn)"></span>Canceladas</button>
+    <button class="filter-btn" data-filter="ausente_cliente"><span class="swatch" style="background:var(--bad)"></span>Ausentes no Cliente</button>
+    <button class="filter-btn" data-filter="ausente_sefaz"><span class="swatch" style="background:var(--miss)"></span>Ausentes na Sefaz</button>
+    <button class="filter-btn" data-filter="terceiros" id="filterTerceirosBtn"><span class="swatch" style="background:var(--other)"></span>Entrada de Terceiros</button>
+    <button class="filter-btn" data-filter="entrada_propria" id="filterEntradaPropriaBtn"><span class="swatch" style="background:var(--self)"></span>Entrada Própria</button>
+    <div class="controls-right">
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9fb2c9" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="search" type="text" placeholder="Buscar por chave, número ou parceiro…">
+      </div>
+      <button class="filter-btn no-print" id="exportCsvBtn" title="Exporta as notas filtradas em CSV">⬇ CSV</button>
+      <button class="filter-btn no-print" id="exportXlsxBtn" title="Exporta as notas filtradas em Excel">⬇ XLSX</button>
+      <button class="filter-btn no-print" id="printBtn" title="Abre a caixa de impressão do navegador — escolha 'Salvar como PDF' no destino">🖨 Imprimir / PDF</button>
+    </div>
+  </div>
+
+  <div class="count-note" id="count-note"></div>
+
+  <div class="chart-panel" id="chartPanel">
+    <div class="chart-head">
+      <h3>Confronto de valores — <span id="chartStatusLabel">Todas as notas</span></h3>
+      <span class="chart-count" id="chartCount"></span>
+    </div>
+    <div id="chartBody"></div>
+  </div>
+
+  <div class="table-wrap">
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th data-key="numero">Nº NF <span class="arrow"></span></th>
+          <th data-key="chave">Chave de Acesso <span class="arrow"></span></th>
+          <th data-key="parceiro">Parceiro <span class="arrow"></span></th>
+          <th data-key="status">Status <span class="arrow"></span></th>
+          <th class="num-col value-col" data-key="ct">Valor Contábil (Sefaz / Cliente) <span class="arrow"></span></th>
+          <th class="num-col value-col" data-key="bc">Base ICMS (Sefaz / Cliente) <span class="arrow"></span></th>
+          <th class="num-col value-col" data-key="icms">Valor ICMS (Sefaz / Cliente) <span class="arrow"></span></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty-state" id="empty-state" style="display:none;">Nenhum registro encontrado para os filtros aplicados.</div>
+  </div>
+
+  <footer>
+    <div><b>Metodologia —</b> Os lançamentos do sistema do cliente são agrupados por Chave NF-e (uma nota pode ter várias linhas por CFOP/produto) e comparados nota a nota com o relatório da Sefaz. Tolerância de arredondamento: R$ 0,01.</div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--ok)"></span>Confere — mesma chave, mesmos valores nos dois relatórios</span>
+      <span><span class="dot" style="background:var(--warn)"></span>Cancelada — nota cancelada na Sefaz, corretamente zerada no cliente</span>
+      <span><span class="dot" style="background:var(--bad)"></span>Ausente no cliente — autorizada na Sefaz, não localizada no sistema</span>
+      <span><span class="dot" style="background:var(--miss)"></span>Ausente na Sefaz — lançada no cliente, CNPJ da chave é o mesmo da empresa, mas não localizada no relatório</span>
+      <span id="legendTerceiros"><span class="dot" style="background:var(--other)"></span>Entrada de terceiros — CNPJ do emitente na chave é de outra empresa; fora do escopo do relatório de saídas da Sefaz</span>
+      <span id="legendEntradaPropria"><span class="dot" style="background:var(--self)"></span>Entrada própria — emissor e destinatário são a mesma empresa (ex.: transferência entre filiais); não é saída para terceiros</span>
+    </div>
+  </footer>
+</div>
+</div>
+
+<script>
+/* ============ Utilidades ============ */
+function stripAccents(s){
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+function norm(s){
+  if(s===null||s===undefined) return '';
+  return stripAccents(String(s)).toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim();
+}
+function parseMoney(v){
+  if(v===null||v===undefined||v==='') return 0;
+  if(typeof v === 'number') return v;
+  let s = String(v).replace(/R\$/gi,'').trim();
+  if(s==='') return 0;
+  // formato brasileiro: milhar com ponto, decimal com vírgula
+  if(s.indexOf(',')>-1){
+    s = s.replace(/\./g,'').replace(',', '.');
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+function fmtMoney(v){
+  if(v===null||v===undefined) return null;
+  return v.toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function round2(n){ return Math.round(n*100)/100; }
+
+// Extrai o CNPJ do emitente embutido na chave de acesso da NF-e/NFC-e.
+// Estrutura da chave (44 dígitos): UF(2) AAMM(4) CNPJ(14) modelo(2) série(3)
+// número(9) tpEmissão(1) código(8) DV(1). O CNPJ ocupa as posições 7 a 20.
+function extractCnpjFromChave(chave){
+  const digits = String(chave).replace(/\D/g,'');
+  if(digits.length !== 44) return null;
+  return digits.substring(6,20);
+}
+function formatCnpj(cnpj){
+  if(!cnpj || cnpj.length!==14) return cnpj || '';
+  return cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+}
+
+/* ============ Leitura de arquivos ============ */
+function readWorkbook(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      try{
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array', cellDates:false});
+        resolve(wb);
+      }catch(err){ reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function sheetToRows(ws){
+  return XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+}
+
+// Procura, nas primeiras 40 linhas, a linha de cabeçalho que contenha um marcador (normalizado)
+function findHeaderRow(rows, marker){
+  const limit = Math.min(rows.length, 40);
+  for(let i=0;i<limit;i++){
+    const row = rows[i] || [];
+    for(let j=0;j<row.length;j++){
+      if(norm(row[j]) === marker) return i;
+    }
+  }
+  return -1;
+}
+
+// Procura, nas primeiras 40 linhas, a linha de cabeçalho que contenha uma
+// célula cujo texto CONTENHA algum dos termos indicados (busca por trecho,
+// não igualdade exata) — usada para achar títulos parecidos, não só o exato.
+function findHeaderRowByHints(rows, hints){
+  const limit = Math.min(rows.length, 40);
+  for(let i=0;i<limit;i++){
+    const row = rows[i] || [];
+    for(let j=0;j<row.length;j++){
+      const n = norm(row[j]);
+      if(n && hints.some(h=>n.includes(h))) return i;
+    }
+  }
+  return -1;
+}
+
+// O que realmente identifica uma chave de acesso é o CONTEÚDO: 44 dígitos
+// (ignorando pontuação/espaços) — independente de como a coluna foi nomeada.
+function looksLikeChaveValue(v){
+  if(v===null||v===undefined) return false;
+  const digits = String(v).replace(/\D/g,'');
+  return digits.length===44;
+}
+
+// Proporção de células preenchidas de uma coluna que parecem uma chave de
+// acesso (44 dígitos) — usada tanto para validar uma coluna candidata (achada
+// pelo título) quanto para varrer a planilha inteira à procura da coluna certa.
+function columnChaveRatio(rows, startRow, col, sampleEnd){
+  let filled=0, hits=0;
+  for(let i=startRow;i<sampleEnd;i++){
+    const row = rows[i];
+    if(!row) continue;
+    const v = row[col];
+    if(v===null||v===undefined||v==='') continue;
+    filled++;
+    if(looksLikeChaveValue(v)) hits++;
+  }
+  return filled>=5 ? hits/filled : 0;
+}
+
+// Varre todas as colunas da planilha (dados, não cabeçalho) e devolve o
+// índice da coluna onde a maioria das células preenchidas parece uma chave
+// de acesso (44 dígitos) — usada quando não há como identificar a coluna
+// pelo título, ou quando os títulos candidatos não batem com o conteúdo.
+function findChaveColumnByContent(rows, startRow){
+  const sampleEnd = Math.min(rows.length, startRow + 3000);
+  let maxCols = 0;
+  for(let i=startRow;i<sampleEnd;i++){ if(rows[i]) maxCols = Math.max(maxCols, rows[i].length); }
+  let best = {col:-1, ratio:0};
+  for(let col=0; col<maxCols; col++){
+    const ratio = columnChaveRatio(rows, startRow, col, sampleEnd);
+    if(ratio>0.5 && ratio>best.ratio) best = {col, ratio};
+  }
+  return best.col;
+}
+
+// Dado o índice de uma linha de cabeçalho, lista TODAS as colunas cujo título
+// contém algum termo relacionado a "chave de acesso" (pode haver mais de uma,
+// ex.: "Chave NF-e" e "Chave CT-e" na mesma planilha), priorizando as que
+// também mencionam NF. Quem decide qual é a certa é o conteúdo (ver acima).
+function findChaveColInHeader(header, hints){
+  const candidates = [];
+  header.forEach((cell,i)=>{
+    const n = norm(cell);
+    if(n && hints.some(h=>n.includes(h))) candidates.push(i);
+  });
+  candidates.sort((a,b)=>{
+    const aNf = norm(header[a]).includes('NF') ? 0 : 1;
+    const bNf = norm(header[b]).includes('NF') ? 0 : 1;
+    return aNf - bNf;
+  });
+  return candidates;
+}
+
+// Resolve a coluna da chave de acesso combinando as duas pistas: o título
+// (busca por termos correlacionados, não o texto exato) e o conteúdo (44
+// dígitos), que é o que realmente importa. Tenta, nesta ordem: 1) entre as
+// colunas cujo título parece com "chave", a primeira cujo conteúdo bate;
+// 2) se nenhuma bater (ou não houver título candidato), varre a planilha
+// inteira procurando a coluna cujo conteúdo é majoritariamente 44 dígitos.
+function resolveChaveColumn(rows, headerRow, dataStartRow){
+  if(headerRow){
+    const candidates = findChaveColInHeader(headerRow, CHAVE_HINTS);
+    const sampleEnd = Math.min(rows.length, dataStartRow + 3000);
+    for(const c of candidates){
+      if(columnChaveRatio(rows, dataStartRow, c, sampleEnd) > 0.5) return c;
+    }
+  }
+  return findChaveColumnByContent(rows, dataStartRow);
+}
+
+const CHAVE_HINTS = ['CHAVE','CODIGO DE ACESSO','COD ACESSO','ACCESS KEY'];
+
+// Diagnóstico detalhado: tenta achar a linha de cabeçalho e cada coluna
+// exigida (chave, valor contábil, base do ICMS, valor do ICMS) e devolve
+// exatamente o que faltou, além de uma amostra dos títulos encontrados —
+// para dar um erro específico em vez de "não achei nada".
+function diagnoseClienteSheet(rows){
+  let hIdx = findHeaderRowByHints(rows, CHAVE_HINTS);
+  if(hIdx === -1) hIdx = findHeaderRowBySynonymPhrases(rows, ALL_VALUE_SYNONYMS);
+  const header = hIdx!==-1 ? rows[hIdx] : null;
+  const idx = header ? resolveClienteColumns(header) : {};
+  const chaveCol = header ? resolveChaveColumn(rows, header, hIdx+1) : findChaveColumnByContent(rows, 0);
+
+  const missing = [];
+  if(chaveCol===-1) missing.push('Chave de Acesso (nenhuma coluna com 44 dígitos foi encontrada)');
+  // Na Validação Simples, só a chave é exigida — não faz sentido reclamar
+  // de colunas de valor que essa planilha nem precisa ter.
+  if(validationDepth==='completa'){
+    if(idx.contabil===undefined) missing.push('Valor Contábil');
+    if(idx.base===undefined) missing.push('Base de Cálculo do ICMS');
+    if(idx.icms===undefined) missing.push('Valor do ICMS');
+  }
+
+  return {
+    headerRowFound: hIdx!==-1,
+    headerRowIndex: hIdx,
+    headerSample: header ? header.map((c,i)=>({i, v:c})).filter(o=>o.v!==null && o.v!=='').slice(0,25) : [],
+    missing,
+  };
+}
+
+
+// Compara title normalizado tirando também os espaços — cobre nomes de
+// coluna em CamelCase colado, tipo "ValorContabil" (sem espaço nenhum),
+// comuns em exports de sistemas de gestão.
+function normNoSpace(s){ return norm(s).replace(/ /g,''); }
+
+// Acha uma coluna cujo título, depois de normalizado, bate EXATAMENTE com uma
+// das frases da lista (não "contém" — é igualdade exata; espaço é ignorado
+// nessa comparação, então "Valor Contabil" também bate com "ValorContabil").
+// Usada para os campos de valor: como não dá pra confirmar pelo conteúdo se
+// "é mesmo ICMS" (é só um número), uma busca por "contém" arriscaria pegar
+// coluna errada em silêncio (ex.: "Vlr. ICMS FCP Interno" contém "Vlr ICMS"
+// mas é outro campo). Frases exatas cobrem variações comuns sem esse risco.
+function findColumnByExactSynonyms(header, exactPhrases){
+  const set = new Set(exactPhrases.map(norm));
+  const setNoSpace = new Set(exactPhrases.map(normNoSpace));
+  for(let i=0;i<header.length;i++){
+    const n = norm(header[i]);
+    if(n && (set.has(n) || setNoSpace.has(normNoSpace(header[i])))) return i;
+  }
+  return -1;
+}
+
+const CONTABIL_SYNONYMS = ['Vlr. contabil','Vlr Contabil','Valor Contabil','Vlr. Total Nota','Valor Total Nota','Valor Total da Nota','Valor da Nota','Valr Total Nota Fiscal','Valor Total Nota Fiscal','Vlr Total Nota Fiscal','Vlr Nota Fiscal','Valor Contabil da Nota'];
+// Termos para achar a coluna do CNPJ/CPF do DESTINATÁRIO da nota — usada
+// para identificar "entrada própria" (emissor = destinatário). Quando a
+// planilha traz duas colunas de CNPJ (emissor + destinatário), pegamos a
+// última; quando traz só uma, ela já é a do destinatário.
+const CNPJ_DEST_SYNONYMS = ['CNPJ/CPF','CNPJ','CPF/CNPJ','CNPJ Destinatario','CNPJ do Destinatario','CNPJ/CPF Destinatario','CPF/CNPJ Destinatario','CNPJ CPF Destinatario','CNPJ CPF do Destinatario','Documento Destinatario'];
+// Palavras que, na Natureza de Operação de uma nota do relatório de SAÍDAS,
+// indicam que na verdade é uma compra (Nota Fiscal de Entrada emitida pela
+// própria empresa — comum em compra de produtor rural, pessoa física etc.):
+// mesmo saindo no relatório de emissor, é uma ENTRADA PRÓPRIA, não uma venda.
+const NATUREZA_COMPRA_KEYWORDS = ['COMPRA','AQUISICAO'].map(norm);
+const BASE_ICMS_SYNONYMS = ['Base do ICMS','Base ICMS','Base de Calculo ICMS','Base Calculo ICMS','BC ICMS','Base Calc ICMS','Base de Calculo do ICMS','Valr Total Base de Calculo','Valor Base','Vlr Base ICMS','Vlr Base','Valor Base ICMS'];
+const ICMS_SYNONYMS = ['Vlr. do ICMS','Vlr ICMS','Valor ICMS','Vl ICMS','Vlr do ICMS','Valor do ICMS','ICMS Valor','Valr Total ICMS','Valor Total ICMS','Vlr Total ICMS'];
+const NUMERO_SYNONYMS = ['Nro. da nota','Numero Documento','Numero da Nota','Numero Nota Fiscal','Nro Documento','Numero do Documento','Nro Nota Fiscal','Numero NFe'];
+const PARCEIRO_SYNONYMS = ['Descricao Parceiro/Empresa','Nome Parceiro','Razao Social Parceiro','Nome Destinatario','Nome do Cliente','Cliente','Destinatario','Nome Emitente','Nome do Emitente'];
+// Termos que indicam a coluna que classifica o TIPO de imposto do lançamento
+// (ICMS/IPI/PIS/COFINS...) — usados para reconhecer relatórios "achatados"
+// onde cada linha é um lançamento de um imposto qualquer, não só ICMS.
+const TIPO_IMPOSTO_SYNONYMS = ['Tipo Imposto','TipoImposto','Tipo de Imposto','Imposto'];
+
+// Todas as frases conhecidas de valor/apoio juntas — usadas para achar a
+// linha de cabeçalho em relatórios onde nenhuma coluna menciona "chave"
+// (a chave pode estar guardada em qualquer coluna, até uma chamada
+// "Observações"; quem acha ela de verdade é a busca por conteúdo).
+const ALL_VALUE_SYNONYMS = [].concat(CONTABIL_SYNONYMS, BASE_ICMS_SYNONYMS, ICMS_SYNONYMS, NUMERO_SYNONYMS, PARCEIRO_SYNONYMS);
+
+// Acha a linha de cabeçalho procurando, célula a célula, qualquer uma das
+// frases conhecidas (mesma comparação exata + sem espaço usada nas colunas
+// de valor) — mais abrangente que um único marcador fixo.
+function findHeaderRowBySynonymPhrases(rows, phrases){
+  const set = new Set(phrases.map(norm));
+  const setNoSpace = new Set(phrases.map(normNoSpace));
+  const limit = Math.min(rows.length, 40);
+  for(let i=0;i<limit;i++){
+    const row = rows[i] || [];
+    for(let j=0;j<row.length;j++){
+      const n = norm(row[j]);
+      if(n && (set.has(n) || setNoSpace.has(normNoSpace(row[j])))) return i;
+    }
+  }
+  return -1;
+}
+
+// Alguns sistemas exportam um relatório "genérico" de lançamentos fiscais em
+// que TODOS os impostos (ICMS, IPI, PIS, COFINS...) usam as MESMAS colunas
+// de valor (ex.: uma coluna simplesmente chamada "Valor"), diferenciando o
+// tipo por uma coluna à parte (ex.: "TipoImposto"). Nesse caso, aceitar uma
+// coluna genérica "Valor" como se fosse sempre o ICMS seria arriscado — só
+// fazemos isso quando essa estrutura é claramente identificável (existe uma
+// coluna "TipoImposto" ao lado) E aplicamos um FILTRO nas linhas para usar
+// somente os lançamentos onde TipoImposto = ICMS.
+function findGenericValorIcmsColumn(header){
+  const tipoImpostoCol = findColumnByExactSynonyms(header, TIPO_IMPOSTO_SYNONYMS);
+  if(tipoImpostoCol === -1) return {icmsCol:-1, tipoImpostoCol:-1};
+  // procura uma coluna cujo título normalizado é exatamente "VALOR" (ou variações bem próximas)
+  const bareValorSynonyms = ['Valor','Vlr','Valor do Lancamento','Valor Lancamento'];
+  const set = new Set(bareValorSynonyms.map(norm));
+  for(let i=0;i<header.length;i++){
+    const n = norm(header[i]);
+    if(n && set.has(n)) return {icmsCol:i, tipoImpostoCol};
+  }
+  return {icmsCol:-1, tipoImpostoCol};
+}
+
+// Resolve todas as colunas de valor/apoio do relatório do cliente a partir
+// da linha de cabeçalho — usada tanto pelo parser quanto pelo diagnóstico,
+// pra garantir que os dois enxergam exatamente a mesma coisa.
+function resolveClienteColumns(header){
+  const targets = {
+    contabil: norm('Vlr. contabil'),
+    base: norm('Base do ICMS'),
+    icms: norm('Vlr. do ICMS'),
+    parceiro: norm('Descricao Parceiro/Empresa'),
+    numero: norm('Nro. da nota'),
+    sequencia: norm('Sequencia'),
+    origem: norm('Origem'),
+  };
+  const idx = {};
+  header.forEach((cell,i)=>{
+    const n = norm(cell);
+    for(const k in targets){ if(n === targets[k] && idx[k]===undefined) idx[k]=i; }
+  });
+
+  if(idx.contabil===undefined){
+    const c = findColumnByExactSynonyms(header, CONTABIL_SYNONYMS);
+    if(c!==-1) idx.contabil = c;
+  }
+  if(idx.base===undefined){
+    const c = findColumnByExactSynonyms(header, BASE_ICMS_SYNONYMS);
+    if(c!==-1) idx.base = c;
+  }
+  if(idx.icms===undefined){
+    const c = findColumnByExactSynonyms(header, ICMS_SYNONYMS);
+    if(c!==-1) idx.icms = c;
+  }
+  if(idx.numero===undefined){
+    const c = findColumnByExactSynonyms(header, NUMERO_SYNONYMS);
+    if(c!==-1) idx.numero = c;
+  }
+  if(idx.parceiro===undefined){
+    const c = findColumnByExactSynonyms(header, PARCEIRO_SYNONYMS);
+    if(c!==-1) idx.parceiro = c;
+  }
+
+  // Último recurso para o valor do ICMS: relatório "genérico" de lançamentos
+  // fiscais com coluna "Valor" + "TipoImposto" (ver comentário acima).
+  if(idx.icms===undefined){
+    const generic = findGenericValorIcmsColumn(header);
+    if(generic.icmsCol!==-1){
+      idx.icms = generic.icmsCol;
+      idx.tipoImposto = generic.tipoImpostoCol;
+    }
+  }
+
+  return idx;
+}
+
+/* ============ Parsers específicos ============ */
+
+function parseSefazSheet(rows, requireValues){
+  requireValues = requireValues !== false; // default true (Validação Completa)
+
+  // 1) tenta achar a linha de cabeçalho por termos relacionados a "chave"
+  let hIdx = findHeaderRowByHints(rows, CHAVE_HINTS);
+  // 2) sem isso, tenta achar a linha de cabeçalho por outra coluna conhecida
+  // da Sefaz, só para conseguir mapear os campos de valor
+  if(hIdx === -1) hIdx = findHeaderRow(rows, norm('VALR TOTAL ICMS'));
+
+  let header, chaveCol, dataStart;
+  if(hIdx !== -1){
+    header = rows[hIdx];
+    chaveCol = resolveChaveColumn(rows, header, hIdx+1);
+    dataStart = hIdx+1;
+  } else {
+    // Sem cabeçalho reconhecível: última tentativa é achar a coluna da
+    // chave só pelo conteúdo (44 dígitos), sem exigir nenhuma outra coluna
+    // — só faz sentido na Validação Simples (sem isso, os campos de valor
+    // nunca seriam encontrados e a Completa vai falhar de qualquer forma).
+    header = null;
+    chaveCol = findChaveColumnByContent(rows, 0);
+    dataStart = 0;
+  }
+  if(chaveCol === -1) return null;
+
+  const idx = {chave: chaveCol};
+  let cnpjDestCol = -1;
+  if(header){
+    const targets = {
+      numero: norm('NUMERO NOTA FISCAL'),
+      situacao: norm('SITUACAO'),
+      valcontabil: norm('VALR TOTAL NOTA FISCAL'),
+      basecalc: norm('VALR TOTAL BASE DE CALCULO'),
+      icms: norm('VALR TOTAL ICMS'),
+      natureza: norm('NATUREZA DE OPERACAO'),
+    };
+    let lastNomeRazao = -1;
+    let cnpjDestCandidates = [];
+    const cnpjDestSet = new Set(CNPJ_DEST_SYNONYMS.map(norm));
+    const cnpjDestSetNoSpace = new Set(CNPJ_DEST_SYNONYMS.map(normNoSpace));
+    header.forEach((cell,i)=>{
+      const n = norm(cell);
+      for(const k in targets){ if(n === targets[k]) idx[k]=i; }
+      if(n === norm('NOME/RAZAO SOCIAL')) lastNomeRazao = i; // pega a última ocorrência = destinatário
+      // Coluna(s) de CNPJ: quando aparece duas vezes (emissor + destinatário),
+      // a última é a do destinatário; quando aparece só uma vez (relatórios
+      // já restritos a um emissor único), essa é a do destinatário.
+      if(n && (cnpjDestSet.has(n) || cnpjDestSetNoSpace.has(normNoSpace(cell)))) cnpjDestCandidates.push(i);
+    });
+    idx.parceiro = lastNomeRazao;
+    cnpjDestCol = cnpjDestCandidates.length ? cnpjDestCandidates[cnpjDestCandidates.length-1] : -1;
+
+    // Reforço: se algum campo de valor não bateu pelo nome exato, tenta por
+    // sinônimos (títulos parecidos), evitando confundir com colunas de ICMS-ST.
+    if(idx.valcontabil===undefined){
+      const c = findColumnByExactSynonyms(header, CONTABIL_SYNONYMS);
+      if(c!==-1) idx.valcontabil = c;
+    }
+    if(idx.basecalc===undefined){
+      const c = findColumnByExactSynonyms(header, BASE_ICMS_SYNONYMS);
+      if(c!==-1) idx.basecalc = c;
+    }
+    if(idx.icms===undefined){
+      const c = findColumnByExactSynonyms(header, ICMS_SYNONYMS);
+      if(c!==-1) idx.icms = c;
+    }
+    if(idx.numero===undefined){
+      const c = findColumnByExactSynonyms(header, ['NNF','N NF','Num NF','Numero NF']);
+      if(c!==-1) idx.numero = c;
+    }
+    if(idx.natureza===undefined){
+      const c = findColumnByExactSynonyms(header, ['Natureza da Operacao','Natureza Operacao','Natureza','Descricao da Natureza de Operacao']);
+      if(c!==-1) idx.natureza = c;
+    }
+  }
+
+  // Valor Contábil e ICMS só são exigidos na Validação Completa — mas mesmo
+  // aí, alguns tipos de consulta da Sefaz (ex.: "Consulta de NFC-e Emitidas")
+  // não trazem a coluna de Base de Cálculo. Nesse caso não rejeitamos a
+  // planilha inteira: seguimos sem comparar a base para essas notas (ela
+  // fica marcada como indisponível), em vez de perder TODAS as notas do
+  // relatório por causa de uma coluna.
+  if(requireValues){
+    const required = ['valcontabil','icms'];
+    for(const r of required){ if(idx[r]===undefined) return null; }
+  }
+  const temBase = idx.basecalc !== undefined;
+
+  const out = [];
+  for(let i=dataStart;i<rows.length;i++){
+    const row = rows[i];
+    if(!row) continue;
+    const chaveRaw = row[idx.chave];
+    if(!looksLikeChaveValue(chaveRaw)) continue; // o conteúdo é quem decide, não o rótulo da coluna
+    const chave = String(chaveRaw).replace(/\D/g,'');
+
+    // Emissor e destinatário com o mesmo CNPJ = nota emitida pela empresa
+    // para ela mesma (ex.: transferência entre filiais) — é uma ENTRADA
+    // PRÓPRIA, não uma saída de verdade para terceiros.
+    let entradaPropria = false;
+    if(cnpjDestCol !== -1){
+      const cnpjDest = String(row[cnpjDestCol]||'').replace(/\D/g,'');
+      const cnpjEmissor = extractCnpjFromChave(chave);
+      if(cnpjDest && cnpjEmissor && cnpjDest === cnpjEmissor) entradaPropria = true;
+    }
+    // Nota Fiscal de Entrada emitida pela própria empresa para formalizar
+    // uma compra (comum em compra de produtor rural, pessoa física, etc.):
+    // aparece no relatório de saídas por ser emitida pela empresa, mas a
+    // Natureza de Operação denuncia que é uma compra, não uma venda.
+    if(!entradaPropria && idx.natureza!==undefined){
+      const natureza = norm(row[idx.natureza]);
+      if(natureza && NATUREZA_COMPRA_KEYWORDS.some(k=>natureza.includes(k))) entradaPropria = true;
+    }
+
+    out.push({
+      chave,
+      numero: idx.numero!==undefined ? row[idx.numero] : null,
+      situacao: idx.situacao!==undefined ? (row[idx.situacao]||'').toString().trim().toUpperCase() : null,
+      parceiro: idx.parceiro>-1 ? row[idx.parceiro] : null,
+      contabil: idx.valcontabil!==undefined ? parseMoney(row[idx.valcontabil]) : null,
+      base: temBase ? parseMoney(row[idx.basecalc]) : null,
+      icms: idx.icms!==undefined ? parseMoney(row[idx.icms]) : null,
+      entradaPropria,
+    });
+  }
+  out.cnpjDestColFound = (cnpjDestCol !== -1); // diagnóstico: achou coluna de CNPJ do destinatário?
+  return out;
+}
+
+function parseClienteSheet(rows, requireValues){
+  requireValues = requireValues !== false; // default true (Validação Completa)
+
+  let hIdx = findHeaderRowByHints(rows, CHAVE_HINTS);
+  if(hIdx === -1) hIdx = findHeaderRowBySynonymPhrases(rows, ALL_VALUE_SYNONYMS);
+
+  let header, chaveCol, dataStart;
+  if(hIdx !== -1){
+    header = rows[hIdx];
+    chaveCol = resolveChaveColumn(rows, header, hIdx+1);
+    dataStart = hIdx+1;
+  } else {
+    // Sem cabeçalho reconhecível: última tentativa é achar a coluna da
+    // chave só pelo conteúdo — só faz sentido na Validação Simples.
+    header = null;
+    chaveCol = findChaveColumnByContent(rows, 0);
+    dataStart = 0;
+  }
+  if(chaveCol === -1) return null;
+
+  const idx = header ? resolveClienteColumns(header) : {};
+  idx.chave = chaveCol;
+
+  if(requireValues){
+    const required = ['contabil','base','icms'];
+    for(const r of required){ if(idx[r]===undefined) return null; }
+  }
+
+  // Evita contar a mesma linha mais de uma vez (ex.: arquivo com registros
+  // duplicados por um cruzamento/join que "explodiu" as linhas). Quando o
+  // relatório traz uma coluna de Sequência (identifica cada linha única
+  // dentro da nota) ou de Origem (ex.: Estoque/Financeiro/CT-e), usamos
+  // chave + sequência (+ origem, se houver) como identificador único da
+  // linha; sem essas colunas, caímos para um "fingerprint" com todos os
+  // valores da linha, que também detecta duplicatas exatas.
+  const seen = new Set();
+  const out = [];
+  for(let i=dataStart;i<rows.length;i++){
+    const row = rows[i];
+    if(!row) continue;
+    const chaveRaw = row[idx.chave];
+    if(!looksLikeChaveValue(chaveRaw)) continue; // o conteúdo é quem decide, não o rótulo da coluna
+
+    // Relatórios "genéricos" de lançamento fiscal (colunas de valor
+    // compartilhadas entre ICMS/IPI/PIS/COFINS) trazem uma coluna à parte
+    // que diz o tipo do lançamento — só usamos as linhas de ICMS. Só se
+    // aplica quando estamos de fato comparando valores.
+    if(requireValues && idx.tipoImposto!==undefined){
+      const tipo = norm(row[idx.tipoImposto]);
+      if(tipo !== 'ICMS') continue;
+    }
+
+    const chave = String(chaveRaw).replace(/\D/g,'');
+    const contabil = idx.contabil!==undefined ? parseMoney(row[idx.contabil]) : null;
+    const base = idx.base!==undefined ? parseMoney(row[idx.base]) : null;
+    const icms = idx.icms!==undefined ? parseMoney(row[idx.icms]) : null;
+
+    let lineKey;
+    if(idx.sequencia!==undefined){
+      lineKey = chave + '|' + (idx.origem!==undefined ? row[idx.origem] : '') + '|' + row[idx.sequencia];
+    } else {
+      // sem coluna de sequência: usa um "fingerprint" com TODAS as colunas
+      // da linha, para só descartar linhas 100% idênticas (duplicata real),
+      // sem afetar itens distintos que coincidentemente têm os mesmos valores.
+      lineKey = chave + '|' + JSON.stringify(row);
+    }
+    if(seen.has(lineKey)) continue;
+    seen.add(lineKey);
+
+    out.push({
+      chave,
+      numero: idx.numero!==undefined ? row[idx.numero] : null,
+      parceiro: idx.parceiro!==undefined ? row[idx.parceiro] : null,
+      contabil,
+      base,
+      icms,
+    });
+  }
+  return out;
+}
+
+/* ============ Estado ============ */
+let sefazFiles=[]; // [{name, wb}] — pode conter vários arquivos (ex.: NF-e + NFC-e)
+let wbCliente=null;
+let sefazCandidateSheets=[]; // [{label, data}] agregando todos os arquivos/planilhas da Sefaz
+let clienteCandidateSheets=[];
+let validationMode = 'saidas'; // 'saidas' | 'entradas'
+let validationDepth = 'completa'; // 'completa' | 'simples'
+
+const el = (id)=>document.getElementById(id);
+const statusLine = el('statusLine');
+
+const MODE_TEXT = {
+  saidas: {
+    hintSefaz: 'NF-e e/ou NFC-e emitidas (.xlsx ou .xls) — selecione ou arraste 1 ou mais arquivos',
+    hintCliente: 'Movimento de livros fiscais — livro de saídas (.xlsx ou .xls) — clique ou arraste aqui',
+    sheetAutoRegex: /SAID/,
+  },
+  entradas: {
+    hintSefaz: 'NF-e/NFC-e recebidas como destinatário (.xlsx ou .xls) — selecione ou arraste 1 ou mais arquivos',
+    hintCliente: 'Movimento de livros fiscais — livro de entradas (.xlsx ou .xls) — clique ou arraste aqui',
+    sheetAutoRegex: /ENTRAD/,
+  },
+};
+
+function applyModeText(){
+  const t = MODE_TEXT[validationMode];
+  el('hintSefaz').textContent = t.hintSefaz;
+  el('hintCliente').textContent = t.hintCliente;
+}
+
+document.querySelectorAll('#modeSelect .mode-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('#modeSelect .mode-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    validationMode = btn.dataset.mode;
+    applyModeText();
+  });
+});
+applyModeText();
+
+// Portal: escolher o tipo de validação leva pro espaço de trabalho
+// correspondente. Trocar de tipo sempre volta pro portal (evita ficar com
+// arquivos lidos sob as regras erradas — a Simples não exige colunas de
+// valor, a Completa exige).
+const DEPTH_BADGE = { completa:'🔎 Validação Completa', simples:'🔑 Validação Simples' };
+
+function enterWorkspace(depth){
+  validationDepth = depth;
+  el('portalScreen').style.display = 'none';
+  el('workspaceScreen').style.display = 'block';
+  el('workspaceBadge').textContent = DEPTH_BADGE[depth];
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+el('portalCompletaBtn').addEventListener('click', ()=>enterWorkspace('completa'));
+el('portalSimplesBtn').addEventListener('click', ()=>enterWorkspace('simples'));
+
+el('backToPortalBtn').addEventListener('click', ()=>{
+  resetFileState();
+  el('workspaceScreen').style.display = 'none';
+  el('portalScreen').style.display = 'block';
+  window.scrollTo({top:0, behavior:'smooth'});
+});
+
+// Limpa arquivos e resultados já carregados, sem recarregar a página (usado
+// ao voltar pro portal e trocar o tipo de validação).
+function resetFileState(){
+  sefazFiles = [];
+  wbCliente = null;
+  sefazCandidateSheets = [];
+  clienteCandidateSheets = [];
+  el('nameSefaz').style.display='none'; el('nameSefaz').textContent='';
+  el('nameCliente').style.display='none'; el('nameCliente').textContent='';
+  el('sefazSheetPicker').classList.remove('show');
+  el('clienteSheetPicker').classList.remove('show');
+  el('report').style.display='none';
+  el('processBtn').disabled = true;
+  statusLine.textContent = '';
+  statusLine.className = 'status-line';
+}
+
+function setupDrop(dropId, inputId, nameId, onFiles){
+  const drop = el(dropId), input = el(inputId), nameEl = el(nameId);
+  drop.addEventListener('click', ()=>input.click());
+  drop.addEventListener('dragover', (e)=>{e.preventDefault(); drop.classList.add('drag');});
+  drop.addEventListener('dragleave', ()=>drop.classList.remove('drag'));
+  drop.addEventListener('drop', (e)=>{
+    e.preventDefault(); drop.classList.remove('drag');
+    if(e.dataTransfer.files.length){ handle(e.dataTransfer.files); }
+  });
+  input.addEventListener('change', ()=>{ handle(input.files); input.value=''; });
+  function handle(fileList){
+    if(!fileList || !fileList.length) return;
+    onFiles(Array.from(fileList));
+  }
+}
+
+function checkReady(){
+  el('processBtn').disabled = !(sefazCandidateSheets.length>0 && clienteCandidateSheets.length>0);
+}
+
+function updateSefazFilenameDisplay(){
+  const nameEl = el('nameSefaz');
+  if(sefazFiles.length===0){ nameEl.style.display='none'; return; }
+  nameEl.style.display = 'inline-block';
+  nameEl.textContent = sefazFiles.map(f=>f.name).join(' + ');
+}
+
+async function rebuildSefazCandidates(){
+  sefazCandidateSheets = [];
+  sefazFiles.forEach(fobj=>{
+    fobj.wb.SheetNames.forEach(name=>{
+      const rows = sheetToRows(fobj.wb.Sheets[name]);
+      const parsed = parseSefazSheet(rows, validationDepth==='completa');
+      if(parsed && parsed.length>0){
+        sefazCandidateSheets.push({label: sefazFiles.length>1 ? `${fobj.name} — ${name}` : name, data:parsed});
+      }
+    });
+  });
+  renderSefazSheetPicker();
+  checkReady();
+}
+
+// Adiciona arquivos da Sefaz (NF-e, NFC-e, etc.) — pode ser chamado várias
+// vezes; os arquivos vão se acumulando até você clicar em "Limpar".
+setupDrop('dropSefaz','fileSefaz','nameSefaz', async (files)=>{
+  statusLine.textContent = `Lendo ${files.length>1?`${files.length} arquivos`:'relatório'} da Sefaz…`;
+  statusLine.className = 'status-line';
+  let anyError = false;
+  for(const file of files){
+    try{
+      const wb = await readWorkbook(file);
+      sefazFiles.push({name:file.name, wb});
+    }catch(err){
+      statusLine.textContent = `Erro ao ler ${file.name}: ${err.message}`;
+      statusLine.className = 'status-line err';
+      anyError = true;
+    }
+  }
+  updateSefazFilenameDisplay();
+  await rebuildSefazCandidates();
+  if(!anyError){
+    statusLine.textContent = sefazCandidateSheets.length
+      ? `${sefazFiles.length} arquivo(s) da Sefaz lido(s) — ${sefazCandidateSheets.length} planilha(s) compatível(is).`
+      : 'Não encontrei a coluna "CHAVE DE ACESSO" nos arquivos enviados. Verifique se são os relatórios corretos.';
+    if(sefazCandidateSheets.length===0){ statusLine.className = 'status-line err'; }
+  }
+});
+
+setupDrop('dropCliente','fileCliente','nameCliente', async (files)=>{
+  const file = files[0];
+  el('nameCliente').textContent = file.name;
+  el('nameCliente').style.display = 'inline-block';
+  statusLine.textContent = 'Lendo relatório do cliente…';
+  statusLine.className = 'status-line';
+  try{
+    const wb = await readWorkbook(file);
+    wbCliente = wb;
+    clienteCandidateSheets = [];
+
+    // Prioriza sempre a planilha chamada "dados" (case/acento-insensível),
+    // ignorando as demais planilhas do arquivo quando ela existir.
+    const dadosSheetName = wb.SheetNames.find(name => norm(name) === norm('dados'));
+
+    if(dadosSheetName){
+      const rows = sheetToRows(wb.Sheets[dadosSheetName]);
+      const parsed = parseClienteSheet(rows, validationDepth==='completa');
+      if(parsed && parsed.length>0){
+        clienteCandidateSheets.push({name: dadosSheetName, data:parsed});
+        statusLine.textContent = `Relatório do cliente lido — usando a planilha "${dadosSheetName}" (${parsed.length.toLocaleString('pt-BR')} linhas).`;
+      } else {
+        const diag = diagnoseClienteSheet(rows);
+        let msg = `A planilha "${dadosSheetName}" foi encontrada, mas faltam ${diag.missing.length>1?'estas colunas':'esta coluna'}: ${diag.missing.join('; ')}.`;
+        if(diag.headerRowFound){
+          const sample = diag.headerSample.map(o=>`col.${o.i+1}="${o.v}"`).join(', ');
+          msg += ` Cabeçalho identificado na linha ${diag.headerRowIndex+1} desta planilha: ${sample || '(sem texto reconhecível)'}.`;
+        } else {
+          msg += ' Não consegui localizar uma linha de cabeçalho reconhecível nas primeiras 40 linhas desta planilha.';
+        }
+        statusLine.textContent = msg;
+        statusLine.className = 'status-line err';
+        wbCliente = null;
+      }
+    } else {
+      // Sem planilha "dados": mantém o comportamento anterior (detecta todas
+      // as planilhas compatíveis e deixa você escolher).
+      wb.SheetNames.forEach(name=>{
+        const rows = sheetToRows(wb.Sheets[name]);
+        const parsed = parseClienteSheet(rows, validationDepth==='completa');
+        if(parsed && parsed.length>0) clienteCandidateSheets.push({name, data:parsed});
+      });
+      if(clienteCandidateSheets.length){
+        statusLine.textContent = `Não encontrei uma planilha "dados" neste arquivo — ${clienteCandidateSheets.length} outra(s) planilha(s) compatível(is) detectada(s).`;
+      } else {
+        // Nenhuma planilha bateu — monta um diagnóstico detalhado a partir da
+        // planilha com mais linhas (a mais provável de ser a principal), pra
+        // dizer exatamente qual coluna não foi reconhecida, em vez de um erro genérico.
+        let melhorNome = null, melhorRows = null, melhorLen = -1;
+        wb.SheetNames.forEach(name=>{
+          const rows = sheetToRows(wb.Sheets[name]);
+          if(rows.length > melhorLen){ melhorLen = rows.length; melhorNome = name; melhorRows = rows; }
+        });
+        const diag = melhorRows ? diagnoseClienteSheet(melhorRows) : null;
+        let msg = `Não reconheci nenhuma planilha deste arquivo como relatório do cliente.`;
+        if(diag){
+          msg += ` Na planilha "${melhorNome}" (a com mais linhas), faltam ${diag.missing.length>1?'estas colunas':'esta coluna'}: ${diag.missing.join('; ')}.`;
+          if(diag.headerRowFound){
+            const sample = diag.headerSample.map(o=>`col.${o.i+1}="${o.v}"`).join(', ');
+            msg += ` Cabeçalho identificado na linha ${diag.headerRowIndex+1}: ${sample || '(sem texto reconhecível)'}.`;
+          } else {
+            msg += ` Não consegui localizar uma linha de cabeçalho reconhecível nas primeiras 40 linhas dessa planilha.`;
+          }
+        }
+        statusLine.textContent = msg;
+      }
+      if(clienteCandidateSheets.length===0){
+        statusLine.className = 'status-line err';
+        wbCliente = null;
+      }
+    }
+    renderClienteSheetPicker();
+  }catch(err){
+    statusLine.textContent = 'Erro ao ler o arquivo do cliente: ' + err.message;
+    statusLine.className = 'status-line err';
+    wbCliente = null;
+    clienteCandidateSheets = [];
+  }
+  checkReady();
+});
+
+function renderSefazSheetPicker(){
+  const wrap = el('sefazSheetPicker');
+  const opts = el('sefazSheetOpts');
+  if(sefazCandidateSheets.length===0){ wrap.classList.remove('show'); return; }
+  wrap.classList.add('show');
+  opts.innerHTML = sefazCandidateSheets.map((s,i)=>`
+    <label class="sheet-opt">
+      <input type="checkbox" value="${i}" checked class="sefazCk">
+      ${s.label} <span class="meta">(${s.data.length.toLocaleString('pt-BR')} notas)</span>
+    </label>
+  `).join('');
+}
+
+function renderClienteSheetPicker(){
+  const wrap = el('clienteSheetPicker');
+  const opts = el('clienteSheetOpts');
+  if(clienteCandidateSheets.length<=1){ wrap.classList.remove('show'); return; }
+  wrap.classList.add('show');
+  const autoRegex = MODE_TEXT[validationMode].sheetAutoRegex;
+  opts.innerHTML = clienteCandidateSheets.map((s,i)=>{
+    const isAuto = autoRegex.test(norm(s.name));
+    return `
+    <label class="sheet-opt">
+      <input type="checkbox" value="${i}" ${isAuto?'checked':''} class="clienteCk">
+      ${s.name} <span class="meta">(${s.data.length.toLocaleString('pt-BR')} linhas)</span>
+    </label>`;
+  }).join('');
+}
+
+el('resetBtn').addEventListener('click', ()=>{
+  location.reload();
+});
+
+/* ============ Processamento ============ */
+el('processBtn').addEventListener('click', ()=>{
+  statusLine.className = 'status-line';
+  statusLine.textContent = 'Processando…';
+
+  // Junta os dados de todos os relatórios/planilhas da Sefaz marcados
+  // (ex.: um relatório de NF-e + um relatório de NFC-e)
+  let sefazRows = [];
+  let cnpjDestColFoundAnywhere = false;
+  const sks = document.querySelectorAll('.sefazCk:checked');
+  if(sks.length>0){
+    sks.forEach(ck=>{
+      const sheet = sefazCandidateSheets[parseInt(ck.value,10)];
+      sefazRows = sefazRows.concat(sheet.data);
+      if(sheet.data.cnpjDestColFound) cnpjDestColFoundAnywhere = true;
+    });
+  } else {
+    sefazCandidateSheets.forEach(s=>{
+      sefazRows = sefazRows.concat(s.data);
+      if(s.data.cnpjDestColFound) cnpjDestColFoundAnywhere = true;
+    });
+  }
+
+  // Escolhe a(s) planilha(s) do cliente
+  let clienteRows = [];
+  const cks = document.querySelectorAll('.clienteCk:checked');
+  if(cks.length>0){
+    cks.forEach(ck=>{ clienteRows = clienteRows.concat(clienteCandidateSheets[parseInt(ck.value,10)].data); });
+  } else {
+    clienteCandidateSheets.forEach(s=>{ clienteRows = clienteRows.concat(s.data); });
+  }
+
+  if(sefazRows.length===0 || clienteRows.length===0){
+    statusLine.textContent = 'Não há dados suficientes para processar.';
+    statusLine.className = 'status-line err';
+    return;
+  }
+
+  // Agrega por chave
+  function aggregate(rowsArr, isSefaz){
+    const map = new Map();
+    rowsArr.forEach(r=>{
+      if(!map.has(r.chave)){
+        map.set(r.chave, {
+          chave:r.chave, numero:r.numero, situacao: isSefaz? r.situacao : null,
+          parceiro:r.parceiro, contabil:0, base:0, icms:0, baseDisponivel:false, entradaPropria:false,
+          temValores:false
+        });
+      }
+      const g = map.get(r.chave);
+      // Na Validação Simples (ou quando a coluna não foi encontrada) os
+      // valores vêm null — não soma nem marca como disponível, em vez de
+      // tratar como zero (que pareceria uma divergência que não é real).
+      if(r.contabil !== null && r.contabil !== undefined){ g.contabil += r.contabil; g.temValores = true; }
+      if(r.icms !== null && r.icms !== undefined){ g.icms += r.icms; g.temValores = true; }
+      if(r.base !== null && r.base !== undefined){ g.base += r.base; g.baseDisponivel = true; }
+      if(r.entradaPropria) g.entradaPropria = true;
+      if(!g.parceiro && r.parceiro) g.parceiro = r.parceiro;
+      if(!g.numero && r.numero) g.numero = r.numero;
+    });
+    return map;
+  }
+
+  const sefazMap = aggregate(sefazRows, true);
+  const clienteMap = aggregate(clienteRows, false);
+
+  // Identifica o CNPJ da própria empresa a partir das chaves de acesso do
+  // relatório da Sefaz (posições 7 a 20 da chave = CNPJ do emitente).
+  // Isso só faz sentido no modo SAÍDAS: aí o relatório da Sefaz é sempre
+  // "notas emitidas pela empresa", então o CNPJ mais frequente entre essas
+  // chaves é o CNPJ da própria empresa. No modo ENTRADAS a empresa é a
+  // DESTINATÁRIA das notas (quem emite é cada fornecedor, com CNPJs
+  // diferentes entre si) — então essa heurística não se aplica e é pulada.
+  let companyCnpj = null;
+  if(validationMode==='saidas'){
+    const cnpjFreq = new Map();
+    sefazMap.forEach((v, chave)=>{
+      const cnpj = extractCnpjFromChave(chave);
+      if(cnpj) cnpjFreq.set(cnpj, (cnpjFreq.get(cnpj)||0)+1);
+    });
+    let companyCnpjCount = 0;
+    cnpjFreq.forEach((count, cnpj)=>{ if(count>companyCnpjCount){ companyCnpjCount=count; companyCnpj=cnpj; } });
+  }
+
+  const allChaves = new Set([...sefazMap.keys(), ...clienteMap.keys()]);
+  const rows = [];
+  let somaCtS=0, somaCtC=0, somaBcS=0, somaBcC=0, somaIcmsS=0, somaIcmsC=0;
+  let ok=0, cancelada=0, ausenteCliente=0, ausenteSefaz=0, terceiros=0, entradaPropria=0;
+  let somaCtTerceiros=0, somaIcmsTerceiros=0;
+  let somaCtEntradaPropria=0, somaIcmsEntradaPropria=0;
+  let notasSemBaseSefaz=0, somaBaseClienteSemContraparte=0;
+
+  allChaves.forEach(chave=>{
+    const s = sefazMap.get(chave);
+    const c = clienteMap.get(chave);
+    let status;
+
+    // Nota emitida pela empresa para ela mesma (emissor = destinatário, ex.:
+    // transferência entre filiais): não é uma saída de verdade para
+    // terceiros, então nem entra no confronto normal de saídas — fica numa
+    // categoria à parte. (Só se aplica no modo Saídas.)
+    if(validationMode==='saidas' && s && s.entradaPropria){
+      status = 'entrada_propria';
+    }
+    else if(s && !c) status = 'ausente_cliente';
+    else if(c && !s) status = 'ausente_sefaz';
+    else if(validationDepth==='simples'){
+      // Validação Simples: só confronta se a chave existe nos dois lados —
+      // não compara nenhum valor. "Cancelada" continua valendo (é só
+      // presença + situação da Sefaz, não depende de comparar valores).
+      status = (s.situacao==='CANCELADA') ? 'cancelada' : 'ok';
+    }
+    else{
+      const difCt = Math.abs(round2(s.contabil - c.contabil));
+      const difIcms = Math.abs(round2(s.icms - c.icms));
+      let divergente = difCt>0.01 || difIcms>0.01;
+      // Só compara a base de cálculo quando a Sefaz realmente trouxe esse
+      // dado para esta nota — senão a ausência da informação pareceria uma
+      // divergência que não é real.
+      if(s.baseDisponivel){
+        const difBc = Math.abs(round2(s.base - c.base));
+        if(difBc>0.01) divergente = true;
+      }
+      if(divergente && s.situacao==='CANCELADA') status = 'cancelada';
+      else if(divergente) status = 'divergente';
+      else status = 'ok';
+    }
+
+    // Uma nota que só existe no sistema do cliente pode não ser uma nota
+    // emitida pela própria empresa: se o CNPJ embutido na chave de acesso
+    // for diferente do CNPJ da empresa (identificado acima), é uma nota de
+    // ENTRADA DE TERCEIROS — não deveria mesmo aparecer no relatório de
+    // saídas da Sefaz, então isso não é uma divergência real. (Só se aplica
+    // no modo Saídas — ver comentário acima.)
+    if(status==='ausente_sefaz' && companyCnpj){
+      const cnpjNota = extractCnpjFromChave(chave);
+      if(cnpjNota && cnpjNota !== companyCnpj) status = 'terceiros';
+    }
+
+    const bcComparavel = !s || s.baseDisponivel; // sem par na Sefaz, ou Sefaz sem essa info
+    const foraDoConfronto = status==='terceiros' || status==='entrada_propria';
+
+    if(s && status!=='entrada_propria') { somaCtS+=s.contabil; somaIcmsS+=s.icms; }
+    if(s && status!=='entrada_propria' && s.baseDisponivel) somaBcS += s.base;
+    if(s && !s.baseDisponivel && c && !foraDoConfronto) notasSemBaseSefaz++;
+    // Notas de terceiros e entradas próprias ficam fora da soma "Cliente"
+    // da reconciliação — não fazem parte do universo de saídas para
+    // terceiros sendo validado.
+    if(c && !foraDoConfronto) {
+      somaCtC+=c.contabil; somaIcmsC+=c.icms;
+      if(bcComparavel) somaBcC += c.base;
+      else somaBaseClienteSemContraparte += c.base;
+    }
+    if(c && status==='terceiros') { somaCtTerceiros+=c.contabil; somaIcmsTerceiros+=c.icms; }
+    if(status==='entrada_propria') { somaCtEntradaPropria+=s.contabil; somaIcmsEntradaPropria+=s.icms; }
+
+    if(status==='ok') ok++;
+    else if(status==='cancelada') cancelada++;
+    else if(status==='ausente_cliente') ausenteCliente++;
+    else if(status==='ausente_sefaz') ausenteSefaz++;
+    else if(status==='terceiros') terceiros++;
+    else if(status==='entrada_propria') entradaPropria++;
+
+    rows.push({
+      chave,
+      numero: s? s.numero : (c? c.numero : null),
+      parceiro: s? s.parceiro : (c? c.parceiro : null),
+      status,
+      ct_s: (s && s.temValores) ? round2(s.contabil): null, ct_c: (c && c.temValores) ? round2(c.contabil): null,
+      bc_s: (s && s.baseDisponivel) ? round2(s.base): null, bc_c: (c && c.baseDisponivel) ? round2(c.base): null,
+      icms_s: (s && s.temValores) ? round2(s.icms): null, icms_c: (c && c.temValores) ? round2(c.icms): null,
+      bcComparavel,
+    });
+  });
+
+  const totals = {
+    total_confrontadas: rows.length, ok, cancelada,
+    ausente_cliente: ausenteCliente, ausente_sefaz: ausenteSefaz, terceiros, entrada_propria: entradaPropria,
+    soma_ct_sefaz: round2(somaCtS), soma_ct_cliente: round2(somaCtC),
+    soma_bc_sefaz: round2(somaBcS), soma_bc_cliente: round2(somaBcC),
+    soma_icms_sefaz: round2(somaIcmsS), soma_icms_cliente: round2(somaIcmsC),
+    soma_ct_terceiros: round2(somaCtTerceiros), soma_icms_terceiros: round2(somaIcmsTerceiros),
+    soma_ct_entrada_propria: round2(somaCtEntradaPropria), soma_icms_entrada_propria: round2(somaIcmsEntradaPropria),
+    notas_sem_base_sefaz: notasSemBaseSefaz, soma_base_cliente_sem_contraparte: round2(somaBaseClienteSemContraparte),
+    company_cnpj: companyCnpj,
+  };
+
+  statusLine.textContent = `Concluído — ${rows.length.toLocaleString('pt-BR')} chaves confrontadas`
+    + (companyCnpj ? ` · CNPJ da empresa identificado: ${formatCnpj(companyCnpj)}` : '')
+    + (validationMode==='saidas' ? (cnpjDestColFoundAnywhere ? ' · coluna de CNPJ do destinatário localizada (detecção de entrada própria ativa)' : ' · ⚠ não localizei a coluna de CNPJ do destinatário no relatório da Sefaz — detecção de entrada própria desativada para esta planilha') : '')
+    + '.';
+  renderReport(rows, totals);
+});
+
+/* ============ Renderização do relatório ============ */
+const statusLabel = {
+  ok:'Confere', cancelada:'Cancelada', ausente_cliente:'Ausente no Cliente',
+  ausente_sefaz:'Ausente na Sefaz', divergente:'Divergente', terceiros:'Entrada de Terceiros',
+  entrada_propria:'Entrada Própria'
+};
+
+let RDATA = {rows:[], totals:null};
+let activeFilter='all', searchTerm='', sortKey=null, sortDir=1;
+
+function renderReport(rows, totals){
+  RDATA = {rows, totals};
+  el('report').style.display = 'block';
+  document.getElementById('report').scrollIntoView({behavior:'smooth', block:'start'});
+  document.body.classList.toggle('depth-simples', validationDepth==='simples');
+
+  document.querySelector('.eyebrow').innerHTML =
+    `<span class="dot"></span>VALIDAÇÃO ${validationDepth==='simples'?'SIMPLES ':''}FISCAL DE ${validationMode==='entradas'?'ENTRADAS':'SAÍDAS'} POR CHAVE DE ACESSO`;
+
+  const cardsEl = el('cards');
+  cardsEl.className = 'cards' + (validationMode==='entradas' ? ' cards-5' : ' cards-7');
+  cardsEl.innerHTML = `
+    <div class="card total"><div class="num">${totals.total_confrontadas.toLocaleString('pt-BR')}</div><div class="lbl">Chaves confrontadas</div></div>
+    <div class="card ok"><div class="num">${totals.ok.toLocaleString('pt-BR')}</div><div class="lbl">Conferem</div></div>
+    <div class="card cancel"><div class="num">${totals.cancelada.toLocaleString('pt-BR')}</div><div class="lbl">Canceladas na Sefaz</div></div>
+    <div class="card miss-c"><div class="num">${totals.ausente_cliente.toLocaleString('pt-BR')}</div><div class="lbl">Ausentes no sistema do cliente</div></div>
+    <div class="card miss-s"><div class="num">${totals.ausente_sefaz.toLocaleString('pt-BR')}</div><div class="lbl">Ausentes no relatório Sefaz</div></div>
+    ${validationMode==='saidas' ? `<div class="card other"><div class="num">${totals.terceiros.toLocaleString('pt-BR')}</div><div class="lbl">Entrada de terceiros (fora do escopo)</div></div>` : ''}
+    ${validationMode==='saidas' ? `<div class="card self"><div class="num">${totals.entrada_propria.toLocaleString('pt-BR')}</div><div class="lbl">Entrada própria (transferência interna)</div></div>` : ''}
+  `;
+
+  el('filterTerceirosBtn').style.display = validationMode==='saidas' ? '' : 'none';
+  el('legendTerceiros').style.display = validationMode==='saidas' ? '' : 'none';
+  el('filterEntradaPropriaBtn').style.display = validationMode==='saidas' ? '' : 'none';
+  el('legendEntradaPropria').style.display = validationMode==='saidas' ? '' : 'none';
+
+  function diffRow(label, s, c){
+    const d = round2(s-c);
+    const cls = Math.abs(d) < 0.01 ? 'diffzero' : 'diff';
+    return `<div class="row ${cls}"><span class="k">${label}</span><span class="v">R$ ${fmtMoney(d)}</span></div>`;
+  }
+  el('recon').innerHTML = `
+    <div class="col"><h3>Valor Contábil</h3>
+      <div class="row"><span class="k">Sefaz</span><span class="v">R$ ${fmtMoney(totals.soma_ct_sefaz)}</span></div>
+      <div class="row"><span class="k">Cliente</span><span class="v">R$ ${fmtMoney(totals.soma_ct_cliente)}</span></div>
+      ${diffRow('Diferença', totals.soma_ct_sefaz, totals.soma_ct_cliente)}
+    </div>
+    <div class="col"><h3>Base de Cálculo ICMS</h3>
+      <div class="row"><span class="k">Sefaz</span><span class="v">R$ ${fmtMoney(totals.soma_bc_sefaz)}</span></div>
+      <div class="row"><span class="k">Cliente</span><span class="v">R$ ${fmtMoney(totals.soma_bc_cliente)}</span></div>
+      ${diffRow('Diferença', totals.soma_bc_sefaz, totals.soma_bc_cliente)}
+    </div>
+    <div class="col"><h3>Valor de ICMS</h3>
+      <div class="row"><span class="k">Sefaz</span><span class="v">R$ ${fmtMoney(totals.soma_icms_sefaz)}</span></div>
+      <div class="row"><span class="k">Cliente</span><span class="v">R$ ${fmtMoney(totals.soma_icms_cliente)}</span></div>
+      ${diffRow('Diferença', totals.soma_icms_sefaz, totals.soma_icms_cliente)}
+    </div>
+    ${totals.terceiros>0 ? `
+    <div class="recon-note">
+      ℹ️ ${totals.terceiros.toLocaleString('pt-BR')} nota(s) do sistema do cliente têm CNPJ do emitente diferente de ${totals.company_cnpj?formatCnpj(totals.company_cnpj):'sua empresa'}
+      (R$ ${fmtMoney(totals.soma_ct_terceiros)} em valor contábil, R$ ${fmtMoney(totals.soma_icms_terceiros)} em ICMS) —
+      são <b>notas de entrada de terceiros</b>, por isso não aparecem no relatório de saídas da Sefaz. Elas foram excluídas dos totais "Cliente" acima e classificadas à parte (veja o filtro "Entrada de Terceiros").
+    </div>` : ''}
+    ${totals.entrada_propria>0 ? `
+    <div class="recon-note">
+      ℹ️ ${totals.entrada_propria.toLocaleString('pt-BR')} nota(s) da Sefaz têm o emissor e o destinatário com o <b>mesmo CNPJ</b>
+      (R$ ${fmtMoney(totals.soma_ct_entrada_propria)} em valor contábil, R$ ${fmtMoney(totals.soma_icms_entrada_propria)} em ICMS) —
+      são <b>notas de entrada própria</b> (ex.: transferência entre filiais), não saídas para terceiros. Elas foram excluídas dos totais "Sefaz" acima e classificadas à parte; o esperado é que apareçam no livro de <b>entradas</b>, não no de saídas.
+      <button class="filter-btn no-print" style="margin-top:8px;" onclick="downloadEntradaPropria()">⬇ Baixar lista de Entrada Própria (XLSX)</button>
+    </div>` : ''}
+    ${totals.notas_sem_base_sefaz>0 ? `
+    <div class="recon-note">
+      ℹ️ ${totals.notas_sem_base_sefaz.toLocaleString('pt-BR')} nota(s) do relatório da Sefaz não trazem a <b>Base de Cálculo do ICMS</b>
+      (comum em relatórios do tipo "Consulta de NFC-e Emitidas") — o valor contábil e o ICMS dessas notas foram comparados normalmente,
+      mas a base delas (R$ ${fmtMoney(totals.soma_base_cliente_sem_contraparte)} do lado do cliente) ficou de fora do total "Base de Cálculo ICMS" acima, por falta de contrapartida da Sefaz para comparar.
+    </div>` : ''}
+  `;
+
+  activeFilter='all'; searchTerm=''; sortKey=null; sortDir=1;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelector('.filter-btn[data-filter="all"]').classList.add('active');
+  el('search').value='';
+  renderTable();
+}
+
+function pairCell(s,c){
+  const sTxt = s===null ? '<span class="dash">—</span>' : fmtMoney(s);
+  const cTxt = c===null ? '<span class="dash">—</span>' : fmtMoney(c);
+  const diff = (s!==null && c!==null) ? Math.abs(round2(s-c)) > 0.01 : false;
+  return `<div class="cellpair"><span class="s ${diff?'diff-flag':''}">${sTxt}</span><span class="c">${cTxt}</span></div>`;
+}
+
+function getRowVal(r,key){
+  if(key==='ct') return r.ct_s ?? r.ct_c ?? 0;
+  if(key==='bc') return r.bc_s ?? r.bc_c ?? 0;
+  if(key==='icms') return r.icms_s ?? r.icms_c ?? 0;
+  return r[key];
+}
+
+let lastFiltered = []; // guarda a última lista filtrada/ordenada, usada pelos botões de exportar
+
+function getFilteredSortedRows(){
+  const rows = RDATA.rows;
+  let filtered = rows.filter(r=>{
+    if(activeFilter!=='all' && r.status!==activeFilter) return false;
+    if(searchTerm){
+      const hay = `${r.chave} ${r.numero||''} ${r.parceiro||''}`.toLowerCase();
+      if(!hay.includes(searchTerm)) return false;
+    }
+    return true;
+  });
+
+  if(sortKey){
+    filtered = filtered.slice().sort((a,b)=>{
+      let va=getRowVal(a,sortKey), vb=getRowVal(b,sortKey);
+      if(typeof va==='string') va=va.toLowerCase();
+      if(typeof vb==='string') vb=vb.toLowerCase();
+      if(va===null||va===undefined) va='';
+      if(vb===null||vb===undefined) vb='';
+      if(va<vb) return -1*sortDir;
+      if(va>vb) return 1*sortDir;
+      return 0;
+    });
+  }
+  return filtered;
+}
+
+function renderTable(){
+  const rows = RDATA.rows;
+  const filtered = getFilteredSortedRows();
+  lastFiltered = filtered;
+
+  el('count-note').textContent = `Exibindo ${filtered.length.toLocaleString('pt-BR')} de ${rows.length.toLocaleString('pt-BR')} chaves`;
+
+  renderValueChart(filtered);
+  renderRanking(filtered);
+
+  const tbody = el('tbody'), emptyState = el('empty-state');
+  if(filtered.length===0){ tbody.innerHTML=''; emptyState.style.display='block'; return; }
+  emptyState.style.display='none';
+
+  const MAX_RENDER = 1500;
+  const toRender = filtered.slice(0, MAX_RENDER);
+  tbody.innerHTML = toRender.map(r=>`
+    <tr>
+      <td>${r.numero ?? '<span class="dash">—</span>'}</td>
+      <td class="chave">${r.chave}</td>
+      <td class="parceiro" title="${(r.parceiro||'').toString().replace(/"/g,'&quot;')}">${r.parceiro || '<span class="dash">—</span>'}</td>
+      <td><span class="status-pill status-${r.status}"><span class="dot"></span>${statusLabel[r.status]}</span></td>
+      <td class="num-col value-col">${pairCell(r.ct_s, r.ct_c)}</td>
+      <td class="num-col value-col">${pairCell(r.bc_s, r.bc_c)}</td>
+      <td class="num-col value-col">${pairCell(r.icms_s, r.icms_c)}</td>
+    </tr>
+  `).join('');
+  if(filtered.length > MAX_RENDER){
+    el('count-note').textContent += ` — mostrando os primeiros ${MAX_RENDER.toLocaleString('pt-BR')} (refine a busca)`;
+  }
+}
+
+const filterLabel = {
+  all:'Todas as notas', ok:'Notas que Conferem', cancelada:'Notas Canceladas',
+  ausente_cliente:'Ausentes no Cliente', ausente_sefaz:'Ausentes na Sefaz', terceiros:'Entrada de Terceiros',
+  entrada_propria:'Entrada Própria'
+};
+
+function renderValueChart(filtered){
+  el('chartStatusLabel').textContent = filterLabel[activeFilter] || 'Todas as notas';
+  el('chartCount').textContent = `${filtered.length.toLocaleString('pt-BR')} chave(s) nesta seleção`;
+
+  const body = el('chartBody');
+  if(filtered.length===0){
+    body.innerHTML = '<div class="chart-empty">Nenhuma nota nesta seleção para exibir no gráfico.</div>';
+    return;
+  }
+
+  function sumField(field){
+    let s=0, c=0;
+    filtered.forEach(r=>{
+      // Notas cuja Base de Cálculo não é comparável (Sefaz não trouxe essa
+      // informação) ficam fora do total de base dos dois lados, pra não
+      // aparecer como "divergência" o que é só ausência de dado.
+      if(field==='bc' && r.bcComparavel===false) return;
+      if(r[field+'_s']!==null) s += r[field+'_s'];
+      if(r[field+'_c']!==null) c += r[field+'_c'];
+    });
+    return {s: round2(s), c: round2(c)};
+  }
+
+  const metrics = [
+    {key:'ct', label:'Valor Contábil'},
+    {key:'bc', label:'Base de Cálculo ICMS'},
+    {key:'icms', label:'Valor de ICMS'},
+  ];
+
+  body.innerHTML = metrics.map(m=>{
+    const {s,c} = sumField(m.key);
+    const max = Math.max(s, c, 0.01);
+    const pctS = Math.max((s/max)*100, s>0?2:0);
+    const pctC = Math.max((c/max)*100, c>0?2:0);
+    const diff = round2(s-c);
+    const isMatch = Math.abs(diff) <= 0.01;
+    return `
+    <div class="metric-block">
+      <div class="metric-title-row">
+        <span class="metric-title">${m.label}</span>
+        <span class="metric-delta ${isMatch?'match':'mismatch'}">${isMatch ? '✓ bate — diferença R$ 0,00' : '⚠ diferença R$ ' + fmtMoney(Math.abs(diff))}</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-tag">Sefaz</span>
+        <div class="bar-track"><div class="bar-fill sefaz" style="width:${pctS}%"></div></div>
+        <span class="bar-val">R$ ${fmtMoney(s)}</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-tag">Cliente</span>
+        <div class="bar-track"><div class="bar-fill cliente" style="width:${pctC}%"></div></div>
+        <span class="bar-val">R$ ${fmtMoney(c)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ============ Ranking de maiores diferenças (risco fiscal) ============ */
+const RISK_STATUSES = new Set(['ausente_cliente','ausente_sefaz','divergente']);
+
+function renderRanking(filtered){
+  el('rankingStatusLabel').textContent = activeFilter==='all' ? '' : `— ${filterLabel[activeFilter]}`;
+
+  const riskRows = filtered
+    .filter(r=>RISK_STATUSES.has(r.status))
+    .map(r=>{
+      const risk = Math.abs((r.icms_s ?? 0) - (r.icms_c ?? 0));
+      return {...r, risk};
+    })
+    .sort((a,b)=>b.risk - a.risk)
+    .slice(0, 15);
+
+  const totalRisk = filtered
+    .filter(r=>RISK_STATUSES.has(r.status))
+    .reduce((acc,r)=>acc + Math.abs((r.icms_s ?? 0) - (r.icms_c ?? 0)), 0);
+
+  el('rankingCount').textContent = riskRows.length
+    ? `Top ${riskRows.length} · exposição de ICMS somada: R$ ${fmtMoney(round2(totalRisk))}`
+    : '';
+
+  const body = el('rankingBody');
+  if(riskRows.length===0){
+    body.innerHTML = '<div class="chart-empty">Nenhuma divergência ou ausência de ICMS relevante nesta seleção — ótimo sinal.</div>';
+    return;
+  }
+
+  const maxRisk = Math.max(...riskRows.map(r=>r.risk), 0.01);
+  body.innerHTML = riskRows.map((r,i)=>{
+    const pct = Math.max((r.risk/maxRisk)*100, 2);
+    return `
+    <div class="rank-row">
+      <span class="rank-pos">${i+1}</span>
+      <div class="rank-info">
+        <div class="rank-parceiro" title="${(r.parceiro||'').toString().replace(/"/g,'&quot;')}">${r.parceiro || r.numero || '—'}</div>
+        <div class="rank-chave">${r.chave}${r.numero ? ' · Nº '+r.numero : ''}</div>
+      </div>
+      <span class="rank-status"><span class="status-pill status-${r.status}"><span class="dot"></span>${statusLabel[r.status]}</span></span>
+      <div class="rank-bar-wrap"><div class="rank-track"><div class="rank-fill" style="width:${pct}%"></div></div></div>
+      <span class="rank-val">R$ ${fmtMoney(round2(r.risk))} ICMS</span>
+    </div>`;
+  }).join('');
+}
+
+/* ============ Exportar CSV / XLSX ============ */
+function exportRowsToArray(){
+  return lastFiltered.map(r=>{
+    const base = {
+      'Chave de Acesso': r.chave,
+      'Número NF': r.numero ?? '',
+      'Parceiro': r.parceiro ?? '',
+      'Status': statusLabel[r.status] || r.status,
+    };
+    if(validationDepth==='simples') return base;
+    return Object.assign(base, {
+      'Valor Contábil (Sefaz)': r.ct_s ?? '',
+      'Valor Contábil (Cliente)': r.ct_c ?? '',
+      'Base ICMS (Sefaz)': r.bc_s ?? '',
+      'Base ICMS (Cliente)': r.bc_c ?? '',
+      'Valor ICMS (Sefaz)': r.icms_s ?? '',
+      'Valor ICMS (Cliente)': r.icms_c ?? '',
+    });
+  });
+}
+
+function escapeCsvCell(v){
+  const s = String(v ?? '');
+  if(/[;"\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+  return s;
+}
+
+function downloadBlob(content, filename, mime){
+  const blob = new Blob([content], {type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+el('exportCsvBtn').addEventListener('click', ()=>{
+  const data = exportRowsToArray();
+  if(data.length===0) return;
+  const headers = Object.keys(data[0]);
+  const lines = [headers.join(';')];
+  data.forEach(row=>{
+    lines.push(headers.map(h=>{
+      let v = row[h];
+      if(typeof v === 'number') v = v.toFixed(2).replace('.', ',');
+      return escapeCsvCell(v);
+    }).join(';'));
+  });
+  const csv = '\uFEFF' + lines.join('\r\n'); // BOM para acentuação abrir certo no Excel
+  const suffix = activeFilter==='all' ? 'todas' : activeFilter;
+  downloadBlob(csv, `validacao_fiscal_${suffix}.csv`, 'text/csv;charset=utf-8;');
+});
+
+el('exportXlsxBtn').addEventListener('click', ()=>{
+  const data = exportRowsToArray();
+  if(data.length===0) return;
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Validação');
+  const suffix = activeFilter==='all' ? 'todas' : activeFilter;
+  XLSX.writeFile(wb, `validacao_fiscal_${suffix}.xlsx`);
+});
+
+el('printBtn').addEventListener('click', ()=>{
+  window.print();
+});
+
+// Atalho usado pelo botão dentro do aviso de "Entrada Própria": já filtra a
+// tabela para essa categoria e baixa o XLSX na hora, sem precisar clicar em
+// dois lugares.
+function downloadEntradaPropria(){
+  document.querySelectorAll('.filter-btn[data-filter]').forEach(b=>b.classList.remove('active'));
+  const btn = document.querySelector('.filter-btn[data-filter="entrada_propria"]');
+  if(btn) btn.classList.add('active');
+  activeFilter = 'entrada_propria';
+  searchTerm = '';
+  el('search').value = '';
+  renderTable();
+  const data = exportRowsToArray();
+  if(data.length===0) return;
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Entrada Própria');
+  XLSX.writeFile(wb, 'validacao_fiscal_entrada_propria.xlsx');
+}
+
+document.querySelectorAll('.filter-btn[data-filter]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.filter-btn[data-filter]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    activeFilter = btn.dataset.filter;
+    renderTable();
+  });
+});
+el('search').addEventListener('input', (e)=>{ searchTerm=e.target.value.trim().toLowerCase(); renderTable(); });
+document.querySelectorAll('thead th[data-key]').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const key = th.dataset.key;
+    if(sortKey===key){ sortDir*=-1; } else { sortKey=key; sortDir=1; }
+    document.querySelectorAll('thead th .arrow').forEach(a=>a.textContent='');
+    th.querySelector('.arrow').textContent = sortDir===1?'▲':'▼';
+    renderTable();
+  });
+});
+</script>
+</body>
+</html>
