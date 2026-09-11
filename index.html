@@ -1489,7 +1489,8 @@ el('processBtn').addEventListener('click', ()=>{
     // --- REGRA CUSTOMIZADA: LN COMÉRCIO ---
     // Pega o nome do parceiro (prioriza Sefaz, se não tiver tenta do Cliente)
     const nomeParceiro = s?.parceiro || c?.parceiro || '';
-    const isLN = norm(nomeParceiro).includes(norm('LN COMERCIO DE ELETRONICOS LTDA'));
+    // Alterado para buscar apenas a raiz do nome, ignorando sufixos como "-LOJA 18" ou "LTDA"
+    const isLN = norm(nomeParceiro).includes(norm('LN COMERCIO DE ELETRONICOS'));
     // --------------------------------------
 
     // Nota emitida pela empresa para ela mesma (emissor = destinatário, ex.:
