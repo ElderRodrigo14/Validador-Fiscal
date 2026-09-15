@@ -201,14 +201,14 @@
   .card.total::before{background:var(--ink-dim);}
   .card.ok::before{background:var(--ok);}
   .card.cancel::before, .card.divergente::before{background:var(--warn);}
-  .card.miss-c::before{background:var(--bad);}
+  .card.miss-c::before, .card.miss-planilha::before{background:var(--bad);}
   .card.miss-s::before, .card.miss-xml::before{background:var(--miss);}
   .card.other::before{background:var(--other);}
   .card.self::before{background:var(--self);}
   .card .num{font-family:var(--mono); font-size:26px; font-weight:600; letter-spacing:-0.02em;}
   .card .lbl{font-size:12px; color:var(--ink-dim); margin-top:4px;}
   .card.ok .num{color:var(--ok);} .card.cancel .num, .card.divergente .num{color:var(--warn);}
-  .card.miss-c .num{color:var(--bad);} .card.miss-s .num, .card.miss-xml .num{color:var(--miss);}
+  .card.miss-c .num, .card.miss-planilha .num{color:var(--bad);} .card.miss-s .num, .card.miss-xml .num{color:var(--miss);}
   .card.other .num{color:var(--other);}
   .card.self .num{color:var(--self);}
 
@@ -422,7 +422,7 @@
 
     <div class="chart-panel" id="rankingPanel">
       <div class="chart-head">
-        <h3>Maiores diferenças — risco fiscal <span id="rankingStatusLabel"></span></h3>
+        <h3 id="rankingTitle">Maiores diferenças — risco fiscal <span id="rankingStatusLabel"></span></h3>
         <span class="chart-count" id="rankingCount"></span>
       </div>
       <div id="rankingBody"></div>
@@ -939,17 +939,34 @@ function processXmlValidation() {
   let ok=0, divergente=0, ausenteXml=0, ausentePlanilha=0;
   let somaDifalP=0, somaDifalX=0, somaFcpP=0, somaFcpX=0;
 
+  // Variáveis para destrinchar a matemática (De onde vem a diferença?)
+  let difal_ausenteXml = 0, difal_ausentePlanilha = 0, difal_divergente = 0;
+  let fcp_ausenteXml = 0, fcp_ausentePlanilha = 0, fcp_divergente = 0;
+
   allChaves.forEach(chave => {
     const plan = excelMap.get(chave);
     const xml = xmlMap.get(chave);
     let status = 'ok';
 
-    if (plan && !xml) status = 'ausente_xml';
-    else if (xml && !plan) status = 'ausente_planilha';
+    if (plan && !xml) {
+      status = 'ausente_xml';
+      difal_ausenteXml += plan.difal;
+      fcp_ausenteXml += plan.fcp;
+    } 
+    else if (xml && !plan) {
+      status = 'ausente_planilha';
+      // Se não tá na planilha, o XML infla a soma do XML negativamente perante a planilha
+      difal_ausentePlanilha -= xml.difal; 
+      fcp_ausentePlanilha -= xml.fcp;
+    } 
     else {
-      const dDifal = Math.abs(round2(plan.difal - xml.difal));
-      const dFcp = Math.abs(round2(plan.fcp - xml.fcp));
-      if (dDifal > 0.01 || dFcp > 0.01) status = 'divergente';
+      const dDifal = plan.difal - xml.difal;
+      const dFcp = plan.fcp - xml.fcp;
+      if (Math.abs(round2(dDifal)) > 0.01 || Math.abs(round2(dFcp)) > 0.01) {
+        status = 'divergente';
+        difal_divergente += dDifal;
+        fcp_divergente += dFcp;
+      }
     }
 
     if (plan) { somaDifalP += plan.difal; somaFcpP += plan.fcp; }
@@ -969,10 +986,16 @@ function processXmlValidation() {
     });
   });
 
+  const breakdown = {
+    difal_ausenteXml, difal_ausentePlanilha, difal_divergente,
+    fcp_ausenteXml, fcp_ausentePlanilha, fcp_divergente
+  };
+
   const totals = {
     total_confrontadas: rows.length, ok, divergente, ausente_xml: ausenteXml, ausente_planilha: ausentePlanilha,
     soma_ct_sefaz: round2(somaDifalP), soma_ct_cliente: round2(somaDifalX), // Reaproveitando chaves p/ UI genérica
-    soma_icms_sefaz: round2(somaFcpP), soma_icms_cliente: round2(somaFcpX)
+    soma_icms_sefaz: round2(somaFcpP), soma_icms_cliente: round2(somaFcpX),
+    breakdown_xml: breakdown
   };
 
   statusLine.textContent = `Concluído — ${rows.length} chaves processadas.`;
@@ -1052,7 +1075,7 @@ function processStandardValidation() {
     else if(status==='ausente_sefaz') ausente_sefaz++;
     else if(status==='terceiros') terceiros++;
     else if(status==='entrada_propria') entrada_propria++;
-    else if(status==='divergente') ausente_cliente++; // soma divergente na interface generica
+    else if(status==='divergente') ausente_cliente++; 
 
     rows.push({
       chave, numero: s?.numero || c?.numero, parceiro: s?.parceiro || c?.parceiro, status,
@@ -1144,7 +1167,7 @@ function renderReport(rows, totals){
     <div class="card ok"><div class="num">${totals.ok}</div><div class="lbl">Conferem</div></div>
     <div class="card divergente"><div class="num">${totals.divergente}</div><div class="lbl">Divergentes</div></div>
     <div class="card miss-s"><div class="num">${totals.ausente_xml}</div><div class="lbl">Faltam XMLs</div></div>
-    <div class="card miss-c"><div class="num">${totals.ausente_planilha}</div><div class="lbl">Não estão na Planilha</div></div>
+    <div class="card miss-planilha"><div class="num">${totals.ausente_planilha}</div><div class="lbl">Não estão na Planilha</div></div>
   ` : `
     <div class="card total"><div class="num">${totals.total_confrontadas}</div><div class="lbl">Chaves</div></div>
     <div class="card ok"><div class="num">${totals.ok}</div><div class="lbl">Conferem</div></div>
@@ -1153,38 +1176,129 @@ function renderReport(rows, totals){
     <div class="card miss-s"><div class="num">${totals.ausente_sefaz}</div><div class="lbl">Falta Sefaz</div></div>
   `;
 
-  // Reconciliation Block
+  // Reconciliation Block & Breakdown
   const diffRow = (s, c) => { const d=round2(s-c); return `<div class="row ${Math.abs(d)<0.01?'diffzero':'diff'}"><span class="k">Diferença</span><span class="v">R$ ${fmtMoney(d)}</span></div>`; };
-  el('recon').innerHTML = isXml ? `
-    <div class="col"><h3>Total DIFAL</h3>
-      <div class="row"><span class="k">Planilha</span><span class="v">R$ ${fmtMoney(totals.soma_ct_sefaz)}</span></div>
-      <div class="row"><span class="k">XMLs</span><span class="v">R$ ${fmtMoney(totals.soma_ct_cliente)}</span></div>
-      ${diffRow(totals.soma_ct_sefaz, totals.soma_ct_cliente)}
-    </div>
-    <div class="col"><h3>Total FCP</h3>
-      <div class="row"><span class="k">Planilha</span><span class="v">R$ ${fmtMoney(totals.soma_icms_sefaz)}</span></div>
-      <div class="row"><span class="k">XMLs</span><span class="v">R$ ${fmtMoney(totals.soma_icms_cliente)}</span></div>
-      ${diffRow(totals.soma_icms_sefaz, totals.soma_icms_cliente)}
-    </div>
-  ` : `
-    <div class="col"><h3>Valor Contábil</h3><div class="row"><span class="k">Sefaz</span><span class="v">R$ ${fmtMoney(totals.soma_ct_sefaz)}</span></div><div class="row"><span class="k">Cliente</span><span class="v">R$ ${fmtMoney(totals.soma_ct_cliente)}</span></div>${diffRow(totals.soma_ct_sefaz, totals.soma_ct_cliente)}</div>
-    <div class="col"><h3>Base de Cálculo</h3><div class="row"><span class="k">Sefaz</span><span class="v">R$ ${fmtMoney(totals.soma_bc_sefaz)}</span></div><div class="row"><span class="k">Cliente</span><span class="v">R$ ${fmtMoney(totals.soma_bc_cliente)}</span></div>${diffRow(totals.soma_bc_sefaz, totals.soma_bc_cliente)}</div>
-    <div class="col"><h3>Valor ICMS</h3><div class="row"><span class="k">Sefaz</span><span class="v">R$ ${fmtMoney(totals.soma_icms_sefaz)}</span></div><div class="row"><span class="k">Cliente</span><span class="v">R$ ${fmtMoney(totals.soma_icms_cliente)}</span></div>${diffRow(totals.soma_icms_sefaz, totals.soma_icms_cliente)}</div>
-  `;
+  
+  let reconHTML = "";
+  if (isXml) {
+    reconHTML = `
+      <div class="col"><h3>Total DIFAL</h3>
+        <div class="row"><span class="k">Planilha</span><span class="v">R$ ${fmtMoney(totals.soma_ct_sefaz)}</span></div>
+        <div class="row"><span class="k">XMLs</span><span class="v">R$ ${fmtMoney(totals.soma_ct_cliente)}</span></div>
+        ${diffRow(totals.soma_ct_sefaz, totals.soma_ct_cliente)}
+      </div>
+      <div class="col"><h3>Total FCP</h3>
+        <div class="row"><span class="k">Planilha</span><span class="v">R$ ${fmtMoney(totals.soma_icms_sefaz)}</span></div>
+        <div class="row"><span class="k">XMLs</span><span class="v">R$ ${fmtMoney(totals.soma_icms_cliente)}</span></div>
+        ${diffRow(totals.soma_icms_sefaz, totals.soma_icms_cliente)}
+      </div>`;
+    
+    // Motor de Destrinchamento Matemático (Diferença)
+    const dDifal = round2(totals.soma_ct_sefaz - totals.soma_ct_cliente);
+    const dFcp = round2(totals.soma_icms_sefaz - totals.soma_icms_cliente);
+    
+    if (Math.abs(dDifal) > 0.01 || Math.abs(dFcp) > 0.01) {
+      const b = totals.breakdown_xml;
+      reconHTML += `<div class="recon-note" style="border-color:var(--warn); background:rgba(232,179,76,0.05); padding:16px; border-radius:8px;">
+        <h4 style="margin:0 0 12px; color:var(--warn); font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">🔎 Análise Matemática: Origem da Diferença</h4>`;
+      
+      if (Math.abs(dDifal) > 0.01) {
+        reconHTML += `<div style="margin-bottom:12px; font-size:12.5px; line-height:1.6;">
+          <b style="color:var(--ink);">DIFAL (A diferença de R$ ${fmtMoney(dDifal)} é causada por):</b><br>
+          <span style="color:var(--miss); font-family:var(--mono);">+ R$ ${fmtMoney(b.difal_ausenteXml)}</span> : Notas presentes na Planilha, mas cujo XML não foi carregado.<br>
+          <span style="color:var(--bad); font-family:var(--mono);">- R$ ${fmtMoney(Math.abs(b.difal_ausentePlanilha))}</span> : XMLs carregados que não constavam na Planilha.<br>
+          <span style="color:var(--warn); font-family:var(--mono);">${b.difal_divergente > 0 ? '+' : '-'} R$ ${fmtMoney(Math.abs(b.difal_divergente))}</span> : Divergência de valores nas notas que estão nos dois lados.
+        </div>`;
+      }
+      if (Math.abs(dFcp) > 0.01) {
+        reconHTML += `<div style="font-size:12.5px; line-height:1.6;">
+          <b style="color:var(--ink);">FCP (A diferença de R$ ${fmtMoney(dFcp)} é causada por):</b><br>
+          <span style="color:var(--miss); font-family:var(--mono);">+ R$ ${fmtMoney(b.fcp_ausenteXml)}</span> : Notas presentes na Planilha, mas cujo XML não foi carregado.<br>
+          <span style="color:var(--bad); font-family:var(--mono);">- R$ ${fmtMoney(Math.abs(b.fcp_ausentePlanilha))}</span> : XMLs carregados que não constavam na Planilha.<br>
+          <span style="color:var(--warn); font-family:var(--mono);">${b.fcp_divergente > 0 ? '+' : '-'} R$ ${fmtMoney(Math.abs(b.fcp_divergente))}</span> : Divergência de valores nas notas que estão nos dois lados.
+        </div>`;
+      }
+      reconHTML += `<div style="margin-top:12px; font-size:12px; color:var(--ink-dim);">Veja o ranking das piores notas abaixo ou utilize os filtros na tabela para localizá-las.</div></div>`;
+    }
 
-  // Esconder gráficos extras na validação XML para manter focado na tabela
+  } else {
+    reconHTML = `
+      <div class="col"><h3>Valor Contábil</h3><div class="row"><span class="k">Sefaz</span><span class="v">R$ ${fmtMoney(totals.soma_ct_sefaz)}</span></div><div class="row"><span class="k">Cliente</span><span class="v">R$ ${fmtMoney(totals.soma_ct_cliente)}</span></div>${diffRow(totals.soma_ct_sefaz, totals.soma_ct_cliente)}</div>
+      <div class="col"><h3>Base de Cálculo</h3><div class="row"><span class="k">Sefaz</span><span class="v">R$ ${fmtMoney(totals.soma_bc_sefaz)}</span></div><div class="row"><span class="k">Cliente</span><span class="v">R$ ${fmtMoney(totals.soma_bc_cliente)}</span></div>${diffRow(totals.soma_bc_sefaz, totals.soma_bc_cliente)}</div>
+      <div class="col"><h3>Valor ICMS</h3><div class="row"><span class="k">Sefaz</span><span class="v">R$ ${fmtMoney(totals.soma_icms_sefaz)}</span></div><div class="row"><span class="k">Cliente</span><span class="v">R$ ${fmtMoney(totals.soma_icms_cliente)}</span></div>${diffRow(totals.soma_icms_sefaz, totals.soma_icms_cliente)}</div>
+    `;
+  }
+  el('recon').innerHTML = reconHTML;
+
+  // Render Charts and Ranking (Ativado para todos os modos agora!)
   if(isXml) {
     el('chartPanel').style.display = 'none';
-    el('rankingPanel').style.display = 'none';
+    el('rankingTitle').innerHTML = `Maiores diferenças — Notas e XMLs causadores <span id="rankingStatusLabel"></span>`;
   } else {
     el('chartPanel').style.display = 'block';
-    el('rankingPanel').style.display = 'block';
+    el('rankingTitle').innerHTML = `Maiores diferenças — Risco fiscal <span id="rankingStatusLabel"></span>`;
   }
 
   activeFilter='all'; searchTerm=''; sortKey=null; sortDir=1;
   el('search').value='';
   renderTable();
 }
+
+/* ============ Ranking de Risco Adaptado para o XML ============ */
+function renderRanking(filtered){
+  const isXml = validationDepth === 'xml';
+  el('rankingStatusLabel').textContent = activeFilter==='all' ? '' : `— ${LABELS[activeFilter]}`;
+
+  const RISK_STATUSES = isXml ? new Set(['ausente_xml','ausente_planilha','divergente']) : new Set(['ausente_cliente','ausente_sefaz','divergente']);
+
+  const riskRows = filtered
+    .filter(r=>RISK_STATUSES.has(r.status))
+    .map(r=>{
+      let risk = 0;
+      if (isXml) {
+        risk = Math.abs((r.difal_s ?? 0) - (r.difal_c ?? 0)) + Math.abs((r.fcp_s ?? 0) - (r.fcp_c ?? 0));
+      } else {
+        risk = Math.abs((r.icms_s ?? 0) - (r.icms_c ?? 0));
+      }
+      return {...r, risk};
+    })
+    .sort((a,b)=>b.risk - a.risk)
+    .slice(0, 15);
+
+  const totalRisk = filtered
+    .filter(r=>RISK_STATUSES.has(r.status))
+    .reduce((acc,r)=>{
+      if (isXml) return acc + Math.abs((r.difal_s ?? 0) - (r.difal_c ?? 0)) + Math.abs((r.fcp_s ?? 0) - (r.fcp_c ?? 0));
+      return acc + Math.abs((r.icms_s ?? 0) - (r.icms_c ?? 0));
+    }, 0);
+
+  el('rankingCount').textContent = riskRows.length
+    ? `Top ${riskRows.length} · divergência somada nesta lista: R$ ${fmtMoney(round2(totalRisk))}`
+    : '';
+
+  const body = el('rankingBody');
+  if(riskRows.length===0){
+    body.innerHTML = '<div class="chart-empty">Nenhuma divergência relevante nesta seleção — tudo certo!</div>';
+    return;
+  }
+
+  const maxRisk = Math.max(...riskRows.map(r=>r.risk), 0.01);
+  body.innerHTML = riskRows.map((r,i)=>{
+    const pct = Math.max((r.risk/maxRisk)*100, 2);
+    return `
+    <div class="rank-row">
+      <span class="rank-pos">${i+1}</span>
+      <div class="rank-info">
+        <div class="rank-parceiro" title="${(r.parceiro||'').toString().replace(/"/g,'&quot;')}">${r.parceiro || r.numero || 'XML/Chave Isolada'}</div>
+        <div class="rank-chave">${r.chave}${r.numero ? ' · Nº '+r.numero : ''}</div>
+      </div>
+      <span class="rank-status"><span class="status-pill status-${r.status}"><span class="dot"></span>${LABELS[r.status]}</span></span>
+      <div class="rank-bar-wrap"><div class="rank-track"><div class="rank-fill" style="width:${pct}%"></div></div></div>
+      <span class="rank-val">R$ ${fmtMoney(round2(r.risk))} ${isXml ? '(DIFAL + FCP)' : 'ICMS'}</span>
+    </div>`;
+  }).join('');
+}
+
 
 function pairCell(s,c){
   const sTxt = s===null ? '<span class="dash">—</span>' : fmtMoney(s);
@@ -1225,6 +1339,8 @@ function renderTable(){
   }
   lastFiltered = filtered;
   el('count-note').textContent = `Exibindo ${filtered.length} de ${rows.length} chaves`;
+
+  renderRanking(filtered);
 
   const tbody = el('tbody'), emptyState = el('empty-state');
   if(filtered.length===0){ tbody.innerHTML=''; emptyState.style.display='block'; return; }
